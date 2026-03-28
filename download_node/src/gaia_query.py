@@ -5,10 +5,10 @@ from astropy.table import Table
 
 class GaiaQueryWrapper:
    
-    def __init__(self):
-        pass
+    def __init__(self, wr_to_file: bool= True):
+        self._wr_to_file = wr_to_file
 
-    def get_gaia_data(self):
+    def get_data(self):
         data = self._send_gaia_query()
 
         df = data.to_pandas()
@@ -19,8 +19,7 @@ class GaiaQueryWrapper:
         pass
 
     def _write_to_file(self, df: pd.DataFrame):
-        pass
-    
+        pass    
 
 
     def _send_gaia_query(
@@ -28,7 +27,8 @@ class GaiaQueryWrapper:
             parallax_lower_bound:int = 0.3,
             parallax_over_error_lower_bound: int = 5,
             ruwe_upper_bound: float = 1.4,
-            phot_g_mean_mag_upper_bound: int = 15
+            phot_g_mean_mag_upper_bound: int = 15,
+            n_stars: int = 500000
         ) -> Table:
         """
         
@@ -38,7 +38,7 @@ class GaiaQueryWrapper:
         """
 
         query = f"""
-            SELECT TOP 500000
+            SELECT TOP {n_stars}
                 g.source_id,
                 g.ra, g.dec,
                 g.parallax,
@@ -60,14 +60,13 @@ class GaiaQueryWrapper:
                 AND g.parallax_over_error > {parallax_over_error_lower_bound}
                 AND g.ruwe < {ruwe_upper_bound}
                 AND g.phot_g_mean_mag < {phot_g_mean_mag_upper_bound}
-                AND g.bp_rp IS NOT NULL
                 AND MOD(CAST(g.random_index AS BIGINT), 50) = 0
+                AND g.bp_rp IS NOT NULL
                 AND g.radial_velocity IS NOT NULL
         """
 
         job = Gaia.launch_job(query)
         return job.get_results()
-    
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-from query import GaiaQueryWrapper
+from download_node.src.gaia_query import GaiaQueryWrapper
 import pandas as pd
 import os
 
@@ -12,7 +12,7 @@ if os.path.exists(file_name):
     df = pd.read_csv(file_name)
 else:
     gqw = GaiaQueryWrapper()
-    df : pd.DataFrame = gqw.get_gaia_data()
+    df : pd.DataFrame = gqw.get_data()
     df.to_csv(file_name)
 
 print(f"{df.isna().sum()=}")

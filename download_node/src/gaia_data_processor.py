@@ -55,17 +55,41 @@ class GaiaDataProcessor():
         )
 
     def _calculate_star_brightness(self, df: pd.DataFrame):
+        # Primary: lum_flame (solar luminosities, log-distributed)
+        # Fallback: phot_g_mean_mag (apparent mag, inverted)
+        
+        brightness = np.where(
+            df["lum_flame"].notna(),
+            np.log10(np.clip(df["lum_flame"], 1e-3, 1e6)),
+            -(df["phot_g_mean_mag"] - 20.0) / 20.0   
+        )
+        
+        # Normalize to [0, 1]
+        b_min, b_max = -3.0, 6.0
+        brightness_norm = np.clip((brightness - b_min) / (b_max - b_min), 0.0, 1.0)
+        
+        df["brightness"] = brightness_norm
+        df["alpha"] = np.clip(0.2 + brightness_norm * 0.8, 0.0, 1.0)  # 0.2 floor so dim stars are still visible
 
-        # teff_gspphot, surface temp
-        # ~3000 RED --> 50000 BLUE
-        # lum_flame
-        # phot_g_mean_mag
-        pass
 
-    def _calculate_star_size(self, df:pd.DataFrame):
+    def _calculate_star_size(self, df: pd.DataFrame):
+        # Primary: teff_gspphot — hotter stars are physically larger on the main sequence
+        # but giants/supergiants break this, so lum_flame is a better size proxy if available
+        # Fallback: bp_rp (inverted, blue stars tend larger/hotter)
 
-        # teff_gspphot, surface temp
-        # ~3000 RED --> 50000 BLUE
+        size = np.where(
+            df["lum_flame"].notna(),
+            np.log10(np.clip(df["lum_flame"], 1e-3, 1e6)),   # same log L — giants naturally big
+            np.where(
+                df["teff_gspphot"].notna(),
+                np.log10(np.clip(df["teff_gspphot"], 3000, 50000)) - np.log10(3000),  # [0, ~1.2]
+                np.clip(1.0 - (df["bp_rp"] + 0.5) / 5.5, 0.0, 1.0)  # inverted norm
+            )
+        )
 
-        # fallback bprp
-        pass
+        # Normalize to [0, 1]
+        s_min, s_max = -3.0, 6.0
+        size_norm = np.clip((size - s_min) / (s_max - s_min), 0.0, 1.0)
+
+        # Scale to point sprite size — tune these once you see it
+        df["size"] = 1.0 + size_norm * 9.0   # [1, 10] px, placeholder range

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package mwm_msgs;
 
-message StarData {
+message Star {
 	int64 id = 1;
 	
 	double pos_x = 2;
@@ -16,4 +16,6 @@ message StarData {
 	optional string name = 7;
 }
 
-
+message StarData {
+    repeated Star stars = 1;
+}
