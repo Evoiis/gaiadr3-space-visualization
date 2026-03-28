@@ -1,15 +1,29 @@
 cmake_minimum_required(VERSION 3.10)
-project(LearnOpenGL)
+project(GaiaDR3Vis)
 set(CMAKE_CXX_STANDARD 17)
 
 find_package(OpenGL REQUIRED)
 find_package(glfw3 REQUIRED)
 find_package(GLEW REQUIRED)
 
+find_package(Protobuf REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(ZMQ REQUIRED libzmq)
+
+
+protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS
+    ../protobuf_msgs/star_data.proto
+)
+
+
 set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/submodules/imgui)
 
 add_executable(main
     src/main.cpp
+
+    # Protobuf
+    ${PROTO_SRCS}
+    ${PROTO_HDRS}
 
     # ImGui core
     ${IMGUI_DIR}/imgui.cpp
@@ -31,10 +45,15 @@ target_include_directories(main PRIVATE
     ${CMAKE_SOURCE_DIR}/include
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
+    ${Protobuf_INCLUDE_DIRS}
+    ${ZMQ_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 target_link_libraries(main
     OpenGL::GL
     glfw
     GLEW::GLEW
+    ${Protobuf_LIBRARIES}
+    ${ZMQ_LIBRARIES}
 )

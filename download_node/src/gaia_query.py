@@ -1,8 +1,12 @@
+import logging
 import os
 import pandas as pd
 
 from astroquery.gaia import Gaia
 from astropy.table import Table
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class GaiaQueryParameters:
 
@@ -42,11 +46,14 @@ class GaiaQueryWrapper:
     def get_data(self):
         file_read = self._read_from_file()
         if file_read is not None:
+            logging.info("Found existing data locally.")
             return file_read
         
         else:
+            logging.info("Sending Query to Gaia archive.")
 
             data = self._send_gaia_query()
+            logging.info("Received result from Gaia archive.")
             df = data.to_pandas()
 
             self._write_to_file(df)

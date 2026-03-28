@@ -1,8 +1,12 @@
 import pandas as pd
 import numpy as np
 import time
+import logging
 
 import star_data_pb2
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class GaiaDataProcessor():
 
@@ -12,6 +16,7 @@ class GaiaDataProcessor():
         self.hip_to_name = dict(zip(iau_data["HIP"].dropna().astype(int), iau_data["Proper Names"]))
 
     def process_data(self, df: pd.DataFrame):
+        logging.info("Processing Gaia Data")
         self._calculate_cartesian_coordinates(df)
         self._calculate_rgb_color(df)
         self._calculate_star_brightness(df)
@@ -43,7 +48,7 @@ class GaiaDataProcessor():
         return stars.SerializeToString()
     
     def _match_star_names(self, df: pd.DataFrame):       
-        df["star_name"] = df["original_ext_source_id"].map(self.hip_to_name)
+        df["star_name"] = df["original_ext_source_id"].map(self.hip_to_name).fillna("")
 
     def _calculate_cartesian_coordinates(self, df: pd.DataFrame):
         df["ra_rad"] = np.deg2rad(df["ra"].values)

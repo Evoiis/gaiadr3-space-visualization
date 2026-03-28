@@ -14,6 +14,8 @@ class DownloadNode():
         - server_port, port to bind the server socket to
         - client_target_port, port to send messages to
         """
+        print(f"Initializing Download Node, {server_port=}")
+
         self.zmq_context = zmq.Context()
         self.socket = self.zmq_context.socket(zmq.REP)
         self.socket.setsockopt(zmq.RCVTIMEO, 1000) # recv timeout after 1 second
@@ -34,17 +36,17 @@ class DownloadNode():
         except KeyboardInterrupt:
             pass
             
-        logger.info("Shutting down Download Node")
+        print("Download Node: Shutting down")
         self._shutdown()
     
     def stop_loop(self):
         self.stop = True
 
     def _loop(self):
-
+        print("Download Node: Loop Starting")
         while not self.stop:
-            # Wait for requests from other nodes
             try:
+                # Wait for requests from other nodes
                 received = self.socket.recv()
             except zmq.Again:
                 # Reached timeout, go back to loop start
@@ -53,7 +55,7 @@ class DownloadNode():
             data_req = star_data_pb2.DataRequest()
             data_req.ParseFromString(received)
 
-            logger.info(f"Received request at {data_req.timestamp} from {data_req.node_name}")
+            print(f"Received request at {data_req.timestamp} from {data_req.node_name}")
 
             if self.data is None:
                 self.data = self.data_processor.process_data(self.download_wrapper.get_data())
