@@ -26,9 +26,12 @@ public:
     StarMapPtr m_stars;
     std::mutex m_data_lock;
 
-    StarMapPtr get(){
-        std::lock_guard<std::mutex> lock(m_data_lock);
-        return m_stars;
+    StarMapPtr try_get_ptr(){
+        if (m_data_lock.try_lock()) {
+            std::lock_guard<std::mutex> lock(m_data_lock, std::adopt_lock);
+            return m_stars;
+        }
+        return nullptr;
     }
 
     void set(StarMapPtr new_ptr){
