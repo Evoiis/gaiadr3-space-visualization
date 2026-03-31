@@ -7,6 +7,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/norm.hpp>
+#include <thread>
 
 #include "star_data.hpp"
 #include "camera.hpp"
@@ -21,12 +22,12 @@ public:
 
     Visualization(
         std::shared_ptr<SharedStars> shared_stars_ptr,
-        Camera &camera,
-        BloomPipeline &bp,
-        ImguiUI &ui,
-        float point_scale = 2.0f,
-        int width = 1280,
-        int height = 720
+        Camera& camera,
+        BloomPipeline& bp,
+        ImguiUI& ui,
+        float point_scale,
+        int width,
+        int height
     );
 
     void run();
@@ -46,6 +47,10 @@ private:
 
     glm::mat4 m_projection_matrix;
     glm::mat4 m_vp_matrix;
+
+    Camera& m_camera;
+    BloomPipeline& m_bp;
+    ImguiUI& m_ui;
     
 
     void render_loop();

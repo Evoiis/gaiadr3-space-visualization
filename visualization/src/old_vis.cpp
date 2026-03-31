@@ -389,9 +389,9 @@ int main(){
 
     // Depth On
     // glEnable(GL_DEPTH_TEST);
-    glEnable(GL_PROGRAM_POINT_SIZE);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE); // additive — stars glow through each other
-    glDepthMask(GL_FALSE); // Prevent z-fighting at the far end of the scene
+    // glEnable(GL_PROGRAM_POINT_SIZE);
+    // glBlendFunc(GL_SRC_ALPHA, GL_ONE); // additive — stars glow through each other
+    // glDepthMask(GL_FALSE); // Prevent z-fighting at the far end of the scene
 
     // Controls
     bool pause = false;
@@ -410,40 +410,41 @@ int main(){
 
     while (!glfwWindowShouldClose(window))
     {
-        float now = (float)glfwGetTime();
-        delta_time = now - last_frame_time;
-        last_frame_time = now;
+        // float now = (float)glfwGetTime();
+        // delta_time = now - last_frame_time;
+        // last_frame_time = now;
 
-        // Controls
-        bool space_pressed = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
-        if(space_pressed && !space_was_pressed){
-            pause = !pause;
-        }
-        space_was_pressed = space_pressed;
+        // // Controls
+        // bool space_pressed = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
+        // if(space_pressed && !space_was_pressed){
+        //     pause = !pause;
+        // }
+        // space_was_pressed = space_pressed;
 
-        if(pause){
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            glfwPollEvents();
-            processInput(window);
-            continue;
-        }
+        // if(pause){
+        //     std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        //     glfwPollEvents();
+        //     processInput(window);
+        //     continue;
+        // }
 
-        glfwGetCursorPos(window, &mouse_xpos, &mouse_ypos);
-        processMouseInput(window, mouse_xpos, mouse_ypos);
+        // glfwGetCursorPos(window, &mouse_xpos, &mouse_ypos);
+        // processMouseInput(window, mouse_xpos, mouse_ypos);
 
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();        
+        // ImGui_ImplOpenGL3_NewFrame();
+        // ImGui_ImplGlfw_NewFrame();
+        // ImGui::NewFrame();
         
-        processInput(window);
+        // processInput(window);
+        // //////////////////////////////////
         
-        direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-        direction.y = sin(glm::radians(pitch));
-        direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-        cam.front = glm::normalize(direction);
+        // direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+        // direction.y = sin(glm::radians(pitch));
+        // direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+        // cam.front = glm::normalize(direction);
         
-        processCameraInput(window, cam, delta_time);
-        view = glm::lookAt(cam.pos, cam.pos + cam.front, cam.up);
+        // processCameraInput(window, cam, delta_time);
+        // view = glm::lookAt(cam.pos, cam.pos + cam.front, cam.up);
         
         shader_program.use();
 
@@ -460,6 +461,8 @@ int main(){
         glBindVertexArray(VAO);
         glDrawArrays(GL_POINTS, 0, stars.size());
         glDisable(GL_BLEND);
+
+        //////////////////////////////////////////////
 
         // Brightness Shader Pass
         glBindFramebuffer(GL_FRAMEBUFFER, brightFBO);

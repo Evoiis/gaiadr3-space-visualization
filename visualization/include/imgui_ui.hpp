@@ -19,7 +19,7 @@ public:
 
     void initialize_imgui(GLFWwindow * window);
 
-    void render_ui();
+    void render_ui(glm::mat4 mvp_composite, int width, int height);
 
     void shutdown();
 

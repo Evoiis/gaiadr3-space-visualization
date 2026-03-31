@@ -2,19 +2,24 @@
 
 Visualization::Visualization(
     std::shared_ptr<SharedStars> shared_stars_ptr,
-    Camera &camera,
-    BloomPipeline &bp,
-    ImguiUI &ui,
+    Camera& camera,
+    BloomPipeline& bp,
+    ImguiUI& ui,
     float point_scale,
     int width,
     int height
-){
+)
+    : m_camera(camera), m_bp(bp), m_ui(ui)
+{
+    std::cout << "Init Vis" << std::endl;
     m_window_width = width;
     m_window_height = height;
     m_point_scale = point_scale;
 
     // Init OpenGL
-    glfwInit();
+    if (!glfwInit()) {
+        throw std::runtime_error("OpenGL Init Failed.");    
+    }
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
@@ -24,7 +29,7 @@ Visualization::Visualization(
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     #endif
 
-    GLFWwindow* m_window = glfwCreateWindow(width, height, "Star Vis", NULL, NULL);
+    m_window = glfwCreateWindow(width, height, "Star Vis", NULL, NULL);
     if (m_window == NULL)
     {
         std::cerr << "Failed to create GLFW window" << std::endl;
@@ -46,23 +51,20 @@ Visualization::Visualization(
     glGenVertexArrays(1, &m_stars_VAO);
     glGenBuffers(1, &m_stars_VBO);
 
-    // Init projection_matrix
-    m_projection_matrix = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.05f, 500.0f);
-
-    // Don't need model matrix because stars are assumed to already be in our world space
-    glm::mat4 vp_composite = m_projection_matrix * camera.get_view_matrix();
-    m_point_sprite_shader->setMatrix4("mvp_composite", vp_composite);
-
+    // Init vp matrices
+    m_projection_matrix = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.05f, 500.0f);    
+    m_vp_matrix = m_projection_matrix * m_camera.get_view_matrix();
+    m_point_sprite_shader->setMatrix4("mvp_composite", m_vp_matrix);
 
     glEnable(GL_PROGRAM_POINT_SIZE);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE); // additive — stars glow through each other
     glDepthMask(GL_FALSE); // Prevent z-fighting at the far end of the scene
 
     // Init Bloom Pipeline
-    bp.initialize_pipeline(width, height);
+    m_bp.initialize_pipeline(width, height);
 
     // Init Imgui UI
-    ui.initialize_imgui(m_window);
+    m_ui.initialize_imgui(m_window);
     
 }
 
@@ -72,7 +74,8 @@ void Visualization::update_star_data(StarMapPtr stars){
     
     // Copy vertices data into buffer's memory
     // glBufferData(GL_ARRAY_BUFFER, stars.size() * sizeof(StarVertex), stars.data(), GL_STATIC_DRAW);
-    
+    // GL_STREAM_DRAW
+
     // glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(StarVertex), (void*)offsetof(StarVertex, position));
     // glEnableVertexAttribArray(0);
     
@@ -84,17 +87,64 @@ void Visualization::update_star_data(StarMapPtr stars){
 }
 
 void Visualization::run(){
-    
+    render_loop();   
 }
 
 // Private Functions -----------------------
 
 void Visualization::render_loop(){
+    bool paused = false;
+    bool space_pressed_prev = false;
+    bool space_pressed;
+
+    float delta_time = 0.f;
+    float last_frame_time = 0.f;
+    float now;
+
+    double mouse_x_pos, mouse_y_pos;
     
     while(!glfwWindowShouldClose(m_window)){
+        now = (float)glfwGetTime();
+        delta_time = now - last_frame_time;
 
+        space_pressed = glfwGetKey(m_window, GLFW_KEY_SPACE) == GLFW_PRESS;
+        if(space_pressed && !space_pressed_prev){
+            paused = !paused;
+        }
+        space_pressed_prev = space_pressed;
 
+        if(paused){
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            glfwPollEvents();
+            process_input();
+            continue;
+        }
+        
+        // Input Processing
+        process_input();
+        glfwGetCursorPos(m_window, &mouse_x_pos, &mouse_y_pos);
+        m_camera.process_mouse_input(m_window, mouse_x_pos, mouse_y_pos);
+        m_camera.process_keyboard_input(m_window, delta_time);
+        
 
+        m_point_sprite_shader->use();
+        m_vp_matrix = m_projection_matrix * m_camera.get_view_matrix();
+        m_point_sprite_shader->setMatrix4("mvp_composite", m_vp_matrix);
+
+        m_bp.bind_hdr_FBO();        
+
+        // Draw Stars
+        glEnable(GL_BLEND);
+        glBindVertexArray(m_stars_VAO);
+        // glDrawArrays(GL_POINTS, 0, stars.size()); // TODO after new data strucs
+        glDisable(GL_BLEND);
+
+        m_bp.run_pipeline();
+
+        m_ui.render_ui(m_vp_matrix, m_window_width, m_window_height);
+
+        glfwSwapBuffers(m_window);
+        glfwPollEvents();
     }
 
     std::cout << "Terminating Visualization" << std::endl;

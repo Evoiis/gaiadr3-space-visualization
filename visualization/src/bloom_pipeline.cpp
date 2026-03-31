@@ -1,11 +1,14 @@
 #include "bloom_pipeline.hpp"
 
-BloomPipeline::BloomPipeline(){}
+BloomPipeline::BloomPipeline(float blur_amount){
+    m_blur_amount = blur_amount;
+}
 
 void BloomPipeline::initialize_pipeline(int width, int height){
-
     unsigned int m_hdrFBO, m_color_buffer;
     unsigned int m_brightnessFBO, m_brightness_buffer;
+
+    m_initialized = true;
 
     // HDR FBO Setup ----------------------
     glGenFramebuffers(1, &m_hdrFBO);
@@ -81,6 +84,9 @@ void BloomPipeline::initialize_pipeline(int width, int height){
     m_combine_shader = std::make_unique<Shader>(SHADER_DIR "screen.vs", SHADER_DIR "combine.fs");
 
     m_brightness_shader->setFloat("threshold", 0.3f);
+    m_brightness_shader->setInt("image", 0);
+
+    m_blur_shader->setInt("image", 0);
 
     m_combine_shader->setInt("scene", 0);
     m_combine_shader->setInt("bloomBlur", 1);
@@ -91,11 +97,61 @@ void BloomPipeline::initialize_pipeline(int width, int height){
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void BloomPipeline::bind_hdr_FBO(){
+    glBindFramebuffer(GL_FRAMEBUFFER, m_hdrFBO);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+
 void BloomPipeline::run_pipeline(){
     if(!m_initialized){
         throw std::runtime_error("Bloom pipeline was not initialized before BloomPipeline::run_pipeline call.\nMake sure to run the BloomPipeline::initialize_pipeline before using the pipeline.");
     }
 
+    // Brightness Shader Pass
+    glBindFramebuffer(GL_FRAMEBUFFER, m_brightFBO);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    m_brightness_shader->use();
+    glBindVertexArray(m_quad_VAO);
+    // glUniform1i(glGetUniformLocation(brightness_shader.m_ID, "screenTexture"), 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, m_color_buffer);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    // Blur Pass
+    bool horizontal = true;
+    m_blur_shader->use();
+
+    // glUniform1i(glGetUniformLocation(blur_shader.m_ID, "image"), 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_blurFBO[0]);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_blurFBO[1]);
+    glClear(GL_COLOR_BUFFER_BIT);
     
+    // First iteration reads from brightBuffer, every subsequent iteration ping-pongs between the two blur FBOs.
+    // After 10 passes the result is in blurBuffer[!horizontal].
+    for(int i = 0; i < (int)m_blur_amount; i++){
+        glBindFramebuffer(GL_FRAMEBUFFER, m_blurFBO[horizontal]);
+        glUniform1i(glGetUniformLocation(m_blur_shader->m_ID, "horizontal"), horizontal);
+        glBindTexture(GL_TEXTURE_2D, i == 0 ? m_bright_buffer : m_blur_buffer[!horizontal]);
+        glBindVertexArray(m_quad_VAO);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        horizontal = !horizontal;
+    }
+
+    // Back to FBO 0 (Screen) to draw the result with combine pass
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // Combine Pass
+    m_combine_shader->use();
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, m_color_buffer);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, m_blur_buffer[!horizontal]);
+
+    glBindVertexArray(m_quad_VAO);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
 
 }

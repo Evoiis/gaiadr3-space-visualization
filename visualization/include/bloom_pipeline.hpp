@@ -13,9 +13,11 @@
 class BloomPipeline{
 public:
 
-    BloomPipeline();
+    BloomPipeline(float blur_amount);
     
     void initialize_pipeline(int width, int height);
+
+    void bind_hdr_FBO();
 
     void run_pipeline();
 
@@ -43,6 +45,7 @@ private:
     unsigned int m_quad_VBO;
 
     unsigned int m_blurFBO[2], m_blur_buffer[2];
+    float m_blur_amount;
     
 
 };

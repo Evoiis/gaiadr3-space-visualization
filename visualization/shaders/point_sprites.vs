@@ -1,7 +1,7 @@
 #version 330 core
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in float aMagnitude;
-layout(location = 2) in float aColorIndex; // Gaia BP-RP, roughly 0.0 (blue) to 4.0 (red)
+layout(location = 2) in float aColorIndex;
 
 uniform mat4 mvp_composite;
 uniform float uPointScale;

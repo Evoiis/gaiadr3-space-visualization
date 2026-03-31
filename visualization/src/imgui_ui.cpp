@@ -14,8 +14,50 @@ void ImguiUI::initialize_imgui(GLFWwindow * window){
 
 }
 
-void ImguiUI::render_ui(){
+void ImguiUI::render_ui(glm::mat4 mvp_composite, int width, int height){
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
 
+    // Imgui Draw Gui
+    ImGui::SetNextWindowSize(ImVec2(300, 200));
+    ImGui::Begin("Debug");
+    ImGui::Text("Hello");
+    // ImGui::Text("Cam: %.2f %.2f %.2f", cam.pos.x, cam.pos.y, cam.pos.z);
+    // ImGui::Text("Yaw: %.1f  Pitch: %.1f", yaw, pitch);
+    // ImGui::Text("Stars: %zu", stars.size());
+    ImGui::Text("WantMouse: %d", ImGui::GetIO().WantCaptureMouse);
+
+    // Update Blur Parameters
+    // ImGui::SliderFloat("Blur Amount", &blurAmount, 1.0f, 100.0f);
+    // ImGui::Text("BlurAmount: %d", (int)blurAmount);
+
+    // ImGui::SliderFloat("Threshold", &threshold, 0.0f, 1.0f);
+    // brightness_shader.use();
+    // glUniform1f(glGetUniformLocation(brightness_shader.m_ID, "threshold"), threshold);
+
+    // ImGui::SliderFloat("Bloom Strength", &bloomStrength, 0.0f, 3.0f);
+    // combine_shader.use();
+    // glUniform1f(glGetUniformLocation(combine_shader.m_ID, "bloomStrength"), bloomStrength);
+
+    // Draw Star Labels
+    // GetBackgroundDrawLists, Draws behind GUI, but in front of scene        
+    // ImVec2 label_position;
+    // bool should_draw;
+    // for(int i = 0; i < stars.size(); i++){
+    //     should_draw = calculate_label_position(mvp_composite, cam.pos, stars[i], width, height, label_position);
+    //     if(should_draw){
+    //         ImGui::GetBackgroundDrawList()->AddText(
+    //             label_position,
+    //             IM_COL32(255, 255, 255, 255),
+    //             star_meta_data[i].name.c_str()
+    //         );
+    //     }
+    // }
+
+    ImGui::End();
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
 void ImguiUI::shutdown(){
