@@ -20,7 +20,7 @@ set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/submodules/imgui)
 
 add_executable(main
     src/main.cpp
-    # src/vis.cpp
+    src/vis.cpp
     src/shader.cpp
     src/node.cpp
 

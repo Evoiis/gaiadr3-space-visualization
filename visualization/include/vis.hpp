@@ -12,6 +12,7 @@
 #include "camera.hpp"
 #include "bloom_pipeline.hpp"
 #include "imgui_ui.hpp"
+#include "shader.hpp"
 
 #include <iostream>
 
@@ -20,18 +21,31 @@ public:
 
     Visualization(
         std::shared_ptr<SharedStars> shared_stars_ptr,
-        Camera camera,
-        BloomPipeline bp,
-        int width,
-        int height
+        Camera &camera,
+        BloomPipeline &bp,
+        float point_scale = 2.0f,
+        int width = 1280,
+        int height = 720
     );
 
     void run();
 
+    void update_star_data(StarMapPtr stars);
+
 private:
     int m_window_width;
     int m_window_height;
+    unsigned int m_stars_VAO;
+    unsigned int m_stars_VBO;
     GLFWwindow* window;
+
+    float m_point_scale;
+
+    std::unique_ptr<Shader> m_point_sprite_shader;
+
+    glm::mat4 m_projection_matrix;
+    glm::mat4 m_vp_matrix;
+    
 
     void render_loop();
     static void framebuffer_size_callback(GLFWwindow* window, int width, int height);

@@ -1,6 +1,14 @@
 #include "imgui_ui.hpp"
 
-ImguiUI::ImguiUI(){
+ImguiUI::ImguiUI(GLFWwindow * window, float close_label_clip, float far_label_clip){
+    m_far_label_clip = far_label_clip;
+    m_close_label_clip = close_label_clip;
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
 
 }
 
@@ -9,7 +17,14 @@ void ImguiUI::render_ui(){
 }
 
 
-bool ImguiUI::calculate_label_position(glm::mat4 mvp, glm::vec3 cam_pos, StarData star, float width, float height, ImVec2 & result){
+bool ImguiUI::calculate_label_position(
+        glm::mat4 mvp,
+        glm::vec3 cam_pos,
+        StarData star,
+        float width,
+        float height,
+        ImVec2 & result
+    ){
     if(glm::length2(cam_pos - star.position_xyz) > m_far_label_clip * m_far_label_clip){
         return false;
     }

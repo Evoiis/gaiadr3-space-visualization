@@ -15,14 +15,22 @@
 class ImguiUI{
 public:
 
-    ImguiUI(float far_label_clip);
+    ImguiUI(GLFWwindow * window, float close_label_clip, float far_label_clip);
 
     void render_ui();
 
 private:
     float m_far_label_clip;
+    float m_close_label_clip;
 
-    bool ImguiUI::calculate_label_position(glm::mat4 mvp, glm::vec3 cam_pos, StarData star, float width, float height, ImVec2 & result);
+    bool calculate_label_position(
+        glm::mat4 mvp,
+        glm::vec3 cam_pos,
+        StarData star,
+        float width,
+        float height,
+        ImVec2 & result
+    );
 
 };
 

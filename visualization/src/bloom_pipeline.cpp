@@ -1,6 +1,8 @@
 #include "bloom_pipeline.hpp"
 
-BloomPipeline::BloomPipeline(int width, int height){
+BloomPipeline::BloomPipeline(){}
+
+void BloomPipeline::initialize_pipeline(int width, int height){
 
     unsigned int m_hdrFBO, m_color_buffer;
     unsigned int m_brightnessFBO, m_brightness_buffer;
@@ -73,15 +75,27 @@ BloomPipeline::BloomPipeline(int width, int height){
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_blur_buffer[i], 0);
     }
 
+    // Shader Init
+    m_brightness_shader = std::make_unique<Shader>(SHADER_DIR "screen.vs", SHADER_DIR "bright.fs");
+    m_blur_shader = std::make_unique<Shader>(SHADER_DIR "screen.vs", SHADER_DIR "blur.fs");
+    m_combine_shader = std::make_unique<Shader>(SHADER_DIR "screen.vs", SHADER_DIR "combine.fs");
 
+    m_brightness_shader->setFloat("threshold", 0.3f);
 
-
-
+    m_combine_shader->setInt("scene", 0);
+    m_combine_shader->setInt("bloomBlur", 1);
+    m_combine_shader->setInt("bloomStrength", 1.0f);
 
 
     // Cleanup
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
 
+void BloomPipeline::run_pipeline(){
+    if(!m_initialized){
+        throw std::runtime_error("Bloom pipeline was not initialized before BloomPipeline::run_pipeline call.\nMake sure to run the BloomPipeline::initialize_pipeline before using the pipeline.");
+    }
 
+    
 
 }
