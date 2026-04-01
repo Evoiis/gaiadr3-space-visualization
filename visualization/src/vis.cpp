@@ -9,8 +9,9 @@ Visualization::Visualization(
     int width,
     int height
 )
-    : m_camera(camera), m_bp(bp), m_ui(ui)
-{
+    : m_camera(camera), m_bp(bp), m_ui(ui), m_shared_stars(shared_stars_ptr)
+{   
+
     std::cout << "Init Vis" << std::endl;
     m_window_width = width;
     m_window_height = height;
@@ -49,20 +50,21 @@ Visualization::Visualization(
 
     // Init VAO VBO
     glGenVertexArrays(1, &m_stars_VAO);
-    glGenBuffers(1, &m_stars_VBO);
+    glGenBuffers(1, &m_star_colors_VBO);
+    glGenBuffers(1, &m_star_positions_VBO);
+    glGenBuffers(1, &m_star_sizes_VBO);
+    glGenBuffers(1, &m_star_brightness_VBO);
 
-    // TODO: 
-    // VBOs for curr_position, next_position, color, brightness, size
-    // Also add time uniform for gpu lerp
 
     // Init vp matrices
-    m_projection_matrix = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.05f, 500.0f);    
+    m_projection_matrix = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.05f, 3000.0f);   // TODO Param
     m_vp_matrix = m_projection_matrix * m_camera.get_view_matrix();
     m_point_sprite_shader->setMatrix4("mvp_composite", m_vp_matrix);
 
     glEnable(GL_PROGRAM_POINT_SIZE);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE); // additive — stars glow through each other
     glDepthMask(GL_FALSE); // Prevent z-fighting at the far end of the scene
+    glDisable(GL_DEPTH_TEST);
 
     // Init Bloom Pipeline
     m_bp.initialize_pipeline(width, height);
@@ -72,9 +74,54 @@ Visualization::Visualization(
     
 }
 
-void Visualization::update_position_data(StarMapPtr stars){
+void Visualization::load_star_data(){
+
+    while(!m_shared_stars->check_if_updated()){
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    auto data = m_shared_stars->try_get_ptr();
+
+    if(!data){
+        throw std::runtime_error("Expected star data but received nullptr!");
+    }
+    
     glBindVertexArray(m_stars_VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, m_stars_VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_star_positions_VBO);
+
+    std::cout << "# of Stars: " << data->star_positions.size() << std::endl;
+    
+    glBufferData(GL_ARRAY_BUFFER, data->star_positions.size() * sizeof(glm::vec3), data->star_positions.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    glEnableVertexAttribArray(0);
+    
+    // TODO: Next Positions, reserve for when we impl motion
+    // glEnableVertexAttribArray(1);
+    
+    
+    glBindBuffer(GL_ARRAY_BUFFER, m_star_colors_VBO);
+    glBufferData(GL_ARRAY_BUFFER, data->star_colors_rgb.size() * sizeof(glm::vec3), data->star_colors_rgb.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    glEnableVertexAttribArray(2);
+    
+    
+    glBindBuffer(GL_ARRAY_BUFFER, m_star_sizes_VBO);
+    glBufferData(GL_ARRAY_BUFFER, data->star_sizes.size() * sizeof(float), data->star_sizes.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(float), (void*)0);
+    glEnableVertexAttribArray(3);
+    
+    
+    glBindBuffer(GL_ARRAY_BUFFER, m_star_brightness_VBO);
+    glBufferData(GL_ARRAY_BUFFER, data->star_brightness.size() * sizeof(float), data->star_brightness.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(4, 1, GL_FLOAT, GL_FALSE, sizeof(float), (void*)0);
+    glEnableVertexAttribArray(4);
+    
+    m_star_positions = data->star_positions;
+}
+
+void Visualization::update_position_data(){
+    // glBindVertexArray(m_stars_VAO);
+    // glBindBuffer(GL_ARRAY_BUFFER, m_stars_VBO);
     
     // Copy vertices data into buffer's memory
     // glBufferData(GL_ARRAY_BUFFER, stars.size() * sizeof(StarVertex), stars.data(), GL_STATIC_DRAW);
@@ -106,10 +153,13 @@ void Visualization::render_loop(){
     float now;
 
     double mouse_x_pos, mouse_y_pos;
+
+    load_star_data();
     
     while(!glfwWindowShouldClose(m_window)){
         now = (float)glfwGetTime();
         delta_time = now - last_frame_time;
+        last_frame_time = now;
 
         space_pressed = glfwGetKey(m_window, GLFW_KEY_SPACE) == GLFW_PRESS;
         if(space_pressed && !space_pressed_prev){
@@ -129,23 +179,27 @@ void Visualization::render_loop(){
         glfwGetCursorPos(m_window, &mouse_x_pos, &mouse_y_pos);
         m_camera.process_mouse_input(m_window, mouse_x_pos, mouse_y_pos);
         m_camera.process_keyboard_input(m_window, delta_time);
-        
 
         m_point_sprite_shader->use();
         m_vp_matrix = m_projection_matrix * m_camera.get_view_matrix();
         m_point_sprite_shader->setMatrix4("mvp_composite", m_vp_matrix);
 
-        m_bp.bind_hdr_FBO();        
+        m_bp.bind_hdr_FBO();
 
         // Draw Stars
         glEnable(GL_BLEND);
         glBindVertexArray(m_stars_VAO);
-        // glDrawArrays(GL_POINTS, 0, stars.size()); // TODO after new data strucs
+        glDrawArrays(GL_POINTS, 0, m_star_positions.size());
         glDisable(GL_BLEND);
 
         m_bp.run_pipeline();
 
-        m_ui.render_ui(m_vp_matrix, m_window_width, m_window_height);
+        m_ui.render_ui(
+            m_vp_matrix,
+            m_window_width,
+            m_window_height,
+            m_camera.get_camera_pos()
+        );
 
         glfwSwapBuffers(m_window);
         glfwPollEvents();

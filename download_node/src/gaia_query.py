@@ -10,14 +10,17 @@ class GaiaQueryParameters:
 
     def __init__(
             self,
+            n_stars_per_batch: int = 100000,
+            phot_g_mean_mag_upper_bound: int = 21,
+            phot_g_mean_mag_lower_bound: int = 0,
             parallax_lower_bound:float = 0.3,
             parallax_over_error_lower_bound: float = 5.0,
             ruwe_upper_bound: float = 1.4,
-            phot_g_mean_mag_upper_bound: int = 15,
-            n_stars_per_batch: int = 100000,
-            use_random_set: bool = True,
             random_set_modulo: int = 50,
+            use_random_set: bool = True,
             guarantee_rad_velocity: bool = True,
+            ra_lower_bound = 0,
+            ra_upper_bound = 360,
         ):
         """
             parallax_lower_bound : Minimum parallax (mas); filters for nearer stars.
@@ -35,10 +38,13 @@ class GaiaQueryParameters:
         self.parallax_over_error_lower_bound = parallax_over_error_lower_bound
         self.ruwe_upper_bound = ruwe_upper_bound
         self.phot_g_mean_mag_upper_bound = phot_g_mean_mag_upper_bound
+        self.phot_g_mean_mag_lower_bound = phot_g_mean_mag_lower_bound
         self.n_stars_per_batch = n_stars_per_batch
         self.use_random_set = use_random_set
         self.guarantee_rad_velocity = guarantee_rad_velocity
         self.random_set_modulo = random_set_modulo
+        self.ra_lower_bound = ra_lower_bound
+        self.ra_upper_bound = ra_upper_bound
 
 
 class GaiaQueryWrapper:
@@ -56,17 +62,50 @@ class GaiaQueryWrapper:
 
     def get_data(self, number_of_batches):
         return self._get_batches(number_of_batches)
+        # return self._filter_by_directions()
+    
+    def _filter_by_directions(self, batch_number):
+
+        df = pd.DataFrame()
+
+        self.qp.ra_lower_bound = 0
+        self.qp.ra_upper_bound = 90
+        data = self._send_gaia_query(batch_number)
+        self.logger.info(f"RA [{self.qp.ra_lower_bound},{self.qp.ra_upper_bound}]: {len(data)} Stars")
+        df = pd.concat([df, data.to_pandas()], ignore_index=True).drop_duplicates(subset='source_id')
+        
+
+        self.qp.ra_lower_bound = 90
+        self.qp.ra_upper_bound = 180
+        data = self._send_gaia_query(batch_number)
+        self.logger.info(f"RA [{self.qp.ra_lower_bound},{self.qp.ra_upper_bound}]: {len(data)} Stars")
+        df = pd.concat([df, data.to_pandas()], ignore_index=True).drop_duplicates(subset='source_id')
+
+        self.qp.ra_lower_bound = 180
+        self.qp.ra_upper_bound = 270
+        data = self._send_gaia_query(batch_number)
+        self.logger.info(f"RA [{self.qp.ra_lower_bound},{self.qp.ra_upper_bound}]: {len(data)} Stars")
+        df = pd.concat([df, data.to_pandas()], ignore_index=True).drop_duplicates(subset='source_id')
+
+        self.qp.ra_lower_bound = 270
+        self.qp.ra_upper_bound = 360 
+        data = self._send_gaia_query(batch_number)
+        self.logger.info(f"RA [{self.qp.ra_lower_bound},{self.qp.ra_upper_bound}]: {len(data)} Stars")
+        df = pd.concat([df, data.to_pandas()], ignore_index=True).drop_duplicates(subset='source_id')
+
+        return df
     
     def _get_batches(self, number_of_batches: int):
         """
         Makes multiple queries to Gaia Archives to get a larger dataset.
-        Gaia Archives returns around 250000 stars maximum per query
+        Gaia Archives returns around 250000 stars maximum per query (depends on filters)
         """
+        self.logger.info(f"{number_of_batches=}")
 
         if number_of_batches > 1 and not self.qp.use_random_set:
             raise Exception("use_random_set parameter must be true to download multiple batches")
         
-        if number_of_batches <= 0 or number_of_batches >= self.qp.random_set_modulo:
+        if number_of_batches <= 0 or number_of_batches > self.qp.random_set_modulo:
             raise Exception(f"number_of_batches must be a postiive number less than random_set_modulo: {number_of_batches=}, {self.qp.random_set_modulo=}")
         
         file_read = self._read_from_file(number_of_batches)
@@ -77,9 +116,12 @@ class GaiaQueryWrapper:
         df = pd.DataFrame()
 
         for batch_num in range(number_of_batches):
-            data = self._send_gaia_query(batch_num)
+            # data = self._send_gaia_query(batch_num)
+            data = self._filter_by_directions(batch_num)
+
+            self.logger.info(f"{batch_num=}, {len(data)=}")
             
-            df = pd.concat([df, data.to_pandas()], ignore_index=True).drop_duplicates(subset='source_id')
+            df = pd.concat([df, data], ignore_index=True).drop_duplicates(subset='source_id')
 
             # Wait to space out queries to Gaia Archive
             time.sleep(5)
@@ -111,6 +153,8 @@ class GaiaQueryWrapper:
 
     def _generate_file_name(self, n_batches: int):
         file_name = f"data_{self.qp.n_stars_per_batch}"
+
+        file_name += f"phot_mag_up{self.qp.phot_g_mean_mag_upper_bound}"
 
         if self.qp.guarantee_rad_velocity:
             file_name += "_rvelo"
@@ -163,7 +207,10 @@ class GaiaQueryWrapper:
                 AND g.parallax_over_error > {self.qp.parallax_over_error_lower_bound}
                 AND g.ruwe < {self.qp.ruwe_upper_bound}
                 AND g.phot_g_mean_mag < {self.qp.phot_g_mean_mag_upper_bound}
-                AND g.bp_rp IS NOT NULL                
+                AND g.phot_g_mean_mag > {self.qp.phot_g_mean_mag_lower_bound}
+                AND g.bp_rp IS NOT NULL
+                AND g.ra >= {self.qp.ra_lower_bound}
+                AND g.ra <= {self.qp.ra_upper_bound}
         """
         if self.qp.guarantee_rad_velocity:
             query += " AND g.radial_velocity IS NOT NULL"

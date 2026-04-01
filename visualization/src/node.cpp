@@ -65,19 +65,27 @@ int Node::request_gaia_data(){
     return 0;
 }
 
-StarMapPtr Node::reformat_data(const mwm_msgs::Stars& stars){
-    auto new_smp = std::make_shared<StarMap>();
+StarDataPtr Node::reformat_data(const mwm_msgs::Stars& stars){
+    auto new_star_data_ptr = std::make_shared<StarData>();
+
 
     for (const auto& [id, proto_star] : stars.stars()) {
-        StarData star;
-        star.position_xyz = glm::vec3(proto_star.pos_x(), proto_star.pos_y(), proto_star.pos_z());
-        star.color_rgb  = glm::vec3(proto_star.color_r(), proto_star.color_g(), proto_star.color_b());
-        star.brightness = proto_star.brightness();
-        star.size       = proto_star.size();
-        if (proto_star.has_name()) {
-            star.name = proto_star.name();
+        new_star_data_ptr->star_positions.emplace_back(
+            proto_star.pos_x(), proto_star.pos_y(), proto_star.pos_z()
+        );
+
+        new_star_data_ptr->star_colors_rgb.emplace_back(
+            proto_star.color_r(), proto_star.color_g(), proto_star.color_b()
+        );
+
+        new_star_data_ptr->star_brightness.emplace_back(proto_star.brightness());
+        new_star_data_ptr->star_sizes.emplace_back(proto_star.size());
+
+        if(proto_star.has_name()){
+            new_star_data_ptr->star_names.emplace_back(proto_star.name());
+        }else{
+            new_star_data_ptr->star_names.emplace_back(std::to_string(id));
         }
-        (*new_smp)[id] = star;
     }
-    return new_smp;
+    return new_star_data_ptr;
 }

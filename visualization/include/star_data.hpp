@@ -2,38 +2,30 @@
 #define STARDATA_H
 
 #include <string>
-#include <map>
+#include <vector>
 #include <mutex>
 #include <memory>
 
 #include <glm/glm.hpp>
 
 
-struct StarData {
-    glm::vec3 position_xyz; // Parsecs    
-    glm::vec3 color_rgb; // 0-255
+// std::map<int64_t, int> star_id_to_index;
+struct StarData {    
+    std::vector<glm::vec3> star_positions; // xyz, Parsecs
     
-    float brightness;
-    float size;
-    
-    std::string name;
+    std::vector<glm::vec3> star_colors_rgb;
+    std::vector<float> star_brightness;
+    std::vector<float> star_sizes;
+
+    std::vector<std::string> star_names;
 };
 
-// 
-// std::map<int64_t, int> star_id_to_index;
-// std::vector<glm::vec3> star_positions;
 
-// Set and delete once
-// std::vector<glm::vec3> star_colors_rgb;
-// std::vector<float> star_brightness;
-// std::vector<float> star_sizes;
-
-using StarMap = std::map<int64_t, StarData>;
-using StarMapPtr = std::shared_ptr<StarMap>;
+using StarDataPtr = std::shared_ptr<StarData>;
 class SharedStars{
 public:
 
-    StarMapPtr try_get_ptr(){
+    StarDataPtr try_get_ptr(){
         if (m_data_lock.try_lock()) {
             std::lock_guard<std::mutex> lock(m_data_lock, std::adopt_lock);
             return m_stars;
@@ -47,14 +39,14 @@ public:
         return m_updated;
     }
 
-    void set(StarMapPtr new_ptr){
+    void set(StarDataPtr new_ptr){
         std::lock_guard<std::mutex> lock(m_data_lock);
         m_stars = new_ptr;
         m_updated = true;
     }
 
 private:
-    StarMapPtr m_stars = nullptr;
+    StarDataPtr m_stars = nullptr;
     std::mutex m_data_lock;
     bool m_updated = false;
 

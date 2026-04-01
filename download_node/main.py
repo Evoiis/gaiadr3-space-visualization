@@ -8,12 +8,21 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     gqw = GaiaQueryWrapper(GaiaQueryParameters(
-        n_stars_per_batch=1
-    ))  # TODO: query launch params
+        n_stars_per_batch=250000,
+        guarantee_rad_velocity=True,
+        # random_set_modulo=50,
+        # phot_g_mean_mag_upper_bound=8
+    ))
 
     gdp = GaiaDataProcessor("data/") # TODO data folder path launch param
 
-    dnode = DownloadNode(gqw, gdp, 5656, 1) # TODO launch params
+    dnode = DownloadNode(
+        gqw,
+        gdp,
+        5656,
+        preload_data=True,
+        n_batches=5
+    ) # TODO launch params
 
     dnode.run_node()
 

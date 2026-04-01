@@ -8,7 +8,7 @@
 int main() {
 
     auto shared_stars = std::make_shared<SharedStars>();
-    int port = 5656; // Launch Param?
+    int port = 5656; // TODO: Launch Param?
     int width = 1280;
     int height = 720;
     int blur_amount = 10;
@@ -25,9 +25,7 @@ int main() {
     
     Visualization vis(shared_stars, cam, bp, ui, point_scale, width, height);
     
-    // node.request_gaia_data();
-    // vis.update_star_data()
-
+    node.request_gaia_data();
     vis.run();
 
 

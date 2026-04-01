@@ -24,7 +24,7 @@ private:
     std::string m_server_address;
     std::shared_ptr<SharedStars> m_shared_stars_ptr;
 
-    StarMapPtr reformat_data(const mwm_msgs::Stars& stars);
+    StarDataPtr reformat_data(const mwm_msgs::Stars& stars);
 
 };
 

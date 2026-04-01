@@ -5,9 +5,6 @@ BloomPipeline::BloomPipeline(float blur_amount){
 }
 
 void BloomPipeline::initialize_pipeline(int width, int height){
-    unsigned int m_hdrFBO, m_color_buffer;
-    unsigned int m_brightnessFBO, m_brightness_buffer;
-
     m_initialized = true;
 
     // HDR FBO Setup ----------------------
@@ -35,18 +32,18 @@ void BloomPipeline::initialize_pipeline(int width, int height){
     
     // Bright FBO Setup -------------------------------------
     
-    glGenFramebuffers(1, &m_brightnessFBO);
-    glBindFramebuffer(GL_FRAMEBUFFER, m_brightnessFBO);
+    glGenFramebuffers(1, &m_brightFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_brightFBO);
 
-    glGenTextures(1, &m_brightness_buffer);
-    glBindTexture(GL_TEXTURE_2D, m_brightness_buffer);
+    glGenTextures(1, &m_bright_buffer);
+    glBindTexture(GL_TEXTURE_2D, m_bright_buffer);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     // Clamp edges
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_brightness_buffer, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_bright_buffer, 0);
 
     if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         std::cout << "Bright FBO not complete" << std::endl;
@@ -112,8 +109,8 @@ void BloomPipeline::run_pipeline(){
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     m_brightness_shader->use();
+    m_brightness_shader->setInt("screenTexture", 0);
     glBindVertexArray(m_quad_VAO);
-    // glUniform1i(glGetUniformLocation(brightness_shader.m_ID, "screenTexture"), 0);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, m_color_buffer);
     glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -121,8 +118,8 @@ void BloomPipeline::run_pipeline(){
     // Blur Pass
     bool horizontal = true;
     m_blur_shader->use();
+    m_blur_shader->setInt("image", 0);
 
-    // glUniform1i(glGetUniformLocation(blur_shader.m_ID, "image"), 0);
     glBindFramebuffer(GL_FRAMEBUFFER, m_blurFBO[0]);
     glClear(GL_COLOR_BUFFER_BIT);
     glBindFramebuffer(GL_FRAMEBUFFER, m_blurFBO[1]);
@@ -132,7 +129,7 @@ void BloomPipeline::run_pipeline(){
     // After 10 passes the result is in blurBuffer[!horizontal].
     for(int i = 0; i < (int)m_blur_amount; i++){
         glBindFramebuffer(GL_FRAMEBUFFER, m_blurFBO[horizontal]);
-        glUniform1i(glGetUniformLocation(m_blur_shader->m_ID, "horizontal"), horizontal);
+        m_blur_shader->setInt("horizontal", horizontal);
         glBindTexture(GL_TEXTURE_2D, i == 0 ? m_bright_buffer : m_blur_buffer[!horizontal]);
         glBindVertexArray(m_quad_VAO);
         glDrawArrays(GL_TRIANGLES, 0, 6);
