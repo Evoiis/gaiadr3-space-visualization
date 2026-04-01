@@ -1,5 +1,6 @@
 # gaiadr3-space-visualization (WIP)
 
+![Render](./Documentation/Screenshot%20From%202026-04-01%2014-24-08.png)
 
 ## System Architecture 
 
