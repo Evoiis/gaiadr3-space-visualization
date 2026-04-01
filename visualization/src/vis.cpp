@@ -51,6 +51,10 @@ Visualization::Visualization(
     glGenVertexArrays(1, &m_stars_VAO);
     glGenBuffers(1, &m_stars_VBO);
 
+    // TODO: 
+    // VBOs for curr_position, next_position, color, brightness, size
+    // Also add time uniform for gpu lerp
+
     // Init vp matrices
     m_projection_matrix = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.05f, 500.0f);    
     m_vp_matrix = m_projection_matrix * m_camera.get_view_matrix();
@@ -68,7 +72,7 @@ Visualization::Visualization(
     
 }
 
-void Visualization::update_star_data(StarMapPtr stars){
+void Visualization::update_position_data(StarMapPtr stars){
     glBindVertexArray(m_stars_VAO);
     glBindBuffer(GL_ARRAY_BUFFER, m_stars_VBO);
     
@@ -161,4 +165,26 @@ void Visualization::process_input(){
     if(glfwGetKey(m_window, GLFW_KEY_ESCAPE) == GLFW_PRESS){
         glfwSetWindowShouldClose(m_window, true);
     }
+}
+
+std::vector<int64_t> Visualization::select_stars_around_camera(
+    std::vector<int64_t> star_ids,
+    std::vector<glm::vec3> star_positions,
+    const glm::vec3 cam_pos,
+    float radius
+){
+    glm::vec3 delta;
+    std::vector<int64_t> selected_ids;
+    float squared_radius = radius * radius;
+
+
+    for(int i = 0; i < star_ids.size(); i++) {
+        delta = star_positions[i] - cam_pos;
+        float dSq = glm::dot(delta, delta);
+        if (dSq <= squared_radius) {
+            selected_ids.push_back(star_ids[i]);
+        }
+    }
+
+    return selected_ids;
 }

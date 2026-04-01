@@ -182,7 +182,7 @@ def speed_test(n_stars, output_string, t_start, t_end):
         ra, dec, dist_kpc, pmra, pmdec, radial_velocity,
         t_start_gyr=t_start,
         t_end_gyr=t_end,
-        n_timesteps=100,
+        n_timesteps=10,
     )
     print(f"Done, time taken: {time.time() - start}")
     print(output_string)
@@ -213,36 +213,12 @@ def main():
     # )
     # print(f"Done, time taken: {time.time() - start}")
 
-    n_stars = 1000000
+    n_stars = 50000
     t_start = 0
     t_end = 1
-    speed_test(n_stars, f"{n_stars=}, {t_start=}, {t_end=}", t_start, t_end)
-
-    t_end = 0.1
-    speed_test(n_stars, f"{n_stars=}, {t_start=}, {t_end=}", t_start, t_end)
-
-    t_end = 0.01
-    speed_test(n_stars, f"{n_stars=}, {t_start=}, {t_end=}", t_start, t_end)
-
-    t_end = 1
-    n_stars = 500000
-    speed_test(n_stars, f"{n_stars=}, {t_start=}, {t_end=}", t_start, t_end)
-
-    n_stars = 750000
-    speed_test(n_stars, f"{n_stars=}, {t_start=}, {t_end=}", t_start, t_end)
-
-    n_stars = 250000
-    speed_test(n_stars, f"{n_stars=}, {t_start=}, {t_end=}", t_start, t_end)
-    
-    # n_stars = 5000000
     # speed_test(n_stars, f"{n_stars=}, {t_start=}, {t_end=}", t_start, t_end)
+    
 
-    n_stars = 1
-    speed_test(n_stars, f"{n_stars=}, {t_start=}, {t_end=}", t_start, t_end)
-    speed_test(n_stars, f"{n_stars=}, {t_start=}, {t_end=}", t_start, t_end)
-    speed_test(n_stars, f"{n_stars=}, {t_start=}, {t_end=}", t_start, t_end)
-    speed_test(n_stars, f"{n_stars=}, {t_start=}, {t_end=}", t_start, t_end)
-    speed_test(n_stars, f"{n_stars=}, {t_start=}, {t_end=}", t_start, t_end)
 
 
     # Test position lookup at a few times

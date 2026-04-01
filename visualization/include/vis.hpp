@@ -7,7 +7,10 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/norm.hpp>
+
 #include <thread>
+#include <iostream>
+#include <vector>
 
 #include "star_data.hpp"
 #include "camera.hpp"
@@ -15,7 +18,6 @@
 #include "imgui_ui.hpp"
 #include "shader.hpp"
 
-#include <iostream>
 
 class Visualization{
 public:
@@ -32,7 +34,7 @@ public:
 
     void run();
 
-    void update_star_data(StarMapPtr stars);
+    void update_position_data(StarMapPtr stars);
 
 private:
     int m_window_width;
@@ -52,10 +54,22 @@ private:
     BloomPipeline& m_bp;
     ImguiUI& m_ui;
     
+    
+
+    
 
     void render_loop();
+
     static void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+
     void process_input();
+
+    std::vector<int64_t> select_stars_around_camera(
+        std::vector<int64_t> star_ids,
+        std::vector<glm::vec3> star_positions,
+        const glm::vec3 cam_pos,
+        float radius
+    );
 
 };
 

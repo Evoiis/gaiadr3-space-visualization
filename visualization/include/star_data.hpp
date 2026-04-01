@@ -19,13 +19,19 @@ struct StarData {
     std::string name;
 };
 
+// 
+// std::map<int64_t, int> star_id_to_index;
+// std::vector<glm::vec3> star_positions;
+
+// Set and delete once
+// std::vector<glm::vec3> star_colors_rgb;
+// std::vector<float> star_brightness;
+// std::vector<float> star_sizes;
+
 using StarMap = std::map<int64_t, StarData>;
 using StarMapPtr = std::shared_ptr<StarMap>;
 class SharedStars{
 public:
-    StarMapPtr m_stars = nullptr;
-    std::mutex m_data_lock;
-    bool m_updated = false;
 
     StarMapPtr try_get_ptr(){
         if (m_data_lock.try_lock()) {
@@ -46,6 +52,11 @@ public:
         m_stars = new_ptr;
         m_updated = true;
     }
+
+private:
+    StarMapPtr m_stars = nullptr;
+    std::mutex m_data_lock;
+    bool m_updated = false;
 
 };
 
