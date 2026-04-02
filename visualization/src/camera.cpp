@@ -7,6 +7,9 @@ void Camera::process_keyboard_input(GLFWwindow * window, float delta_time){
     if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
         camera_speed = m_faster_speed_mul * delta_time;
     }
+    if(glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS){
+        camera_speed = m_faster_speed_mul * m_faster_speed_mul * delta_time;
+    }
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
         m_pos += camera_speed * m_front;
     }

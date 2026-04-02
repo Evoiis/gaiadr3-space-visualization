@@ -41,7 +41,7 @@ class GaiaDataProcessor():
             star.color_b = row.color_b
             star.brightness = row.brightness
             star.size = row.size
-            if hasattr(row, "star_name"):
+            if hasattr(row, "star_name") and row.star_name:
                 star.name = row.star_name
 
         return stars.SerializeToString()
@@ -130,4 +130,4 @@ class GaiaDataProcessor():
         size_norm = np.clip((size - s_min) / (s_max - s_min), 0.0, 1.0)
 
         # Scale to point sprite size — tune these once you see it
-        df["size"] = 1.0 + size_norm * 9.0   # [1, 10] px, placeholder range
+        df["size"] = 1.0 + size_norm * 9.0   # [1, 10] px, range

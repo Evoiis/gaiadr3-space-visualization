@@ -57,7 +57,7 @@ Visualization::Visualization(
 
 
     // Init vp matrices
-    m_projection_matrix = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.05f, 3000.0f);   // TODO Param
+    m_projection_matrix = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.05f, 1000.0f);   // TODO Param
     m_vp_matrix = m_projection_matrix * m_camera.get_view_matrix();
     m_point_sprite_shader->setMatrix4("mvp_composite", m_vp_matrix);
 
@@ -122,19 +122,6 @@ void Visualization::load_star_data(){
 void Visualization::update_position_data(){
     // glBindVertexArray(m_stars_VAO);
     // glBindBuffer(GL_ARRAY_BUFFER, m_stars_VBO);
-    
-    // Copy vertices data into buffer's memory
-    // glBufferData(GL_ARRAY_BUFFER, stars.size() * sizeof(StarVertex), stars.data(), GL_STATIC_DRAW);
-    // GL_STREAM_DRAW
-
-    // glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(StarVertex), (void*)offsetof(StarVertex, position));
-    // glEnableVertexAttribArray(0);
-    
-    // glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, sizeof(StarVertex), (void*)offsetof(StarVertex, magnitude));
-    // glEnableVertexAttribArray(1);
-    
-    // glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(StarVertex), (void*)offsetof(StarVertex, color));
-    // glEnableVertexAttribArray(2);
 }
 
 void Visualization::run(){

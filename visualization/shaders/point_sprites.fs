@@ -18,10 +18,10 @@ void main() {
     // medium halo
     float halo  = exp(-d * 6.0) * out_brightness * .4;
 
-    // wide soft glow — only on bright stars
+    // wide soft glow
     float glow = exp(-d * 2.) * out_brightness * out_brightness * 0.1;
 
-    float totalBrightness = core + halo + glow;
+    float totalBrightness = (core + halo + glow);
     // float totalBrightness = core * out_size;
     // float totalBrightness = core * 2.; // Can grow size & brightness with multiplication
 
