@@ -4,29 +4,6 @@ Galpy Orbit Integration Performance on a AMD Ryzen 7 7700X 8-Core CPU.
 
 
 ## Orbit Integration Benchmark
-### Single timestep
-
-0 and t_end from t_end = 10-9 to 1.
-
-30 samples per each set of parameters.
-
-
-![Orbit Benchmark Plot](./orbit_calculation_time_vs_time_step.png)
-***Figure A***
-
-| Time Step (t_end) | Avg Time (1M stars, sec) | Avg Time (2M stars, sec) |
-| --- | --- | --- |
-| 1e-09 | 0.700 | 1.380 |
-| 1e-08 | 0.703 | 1.426 |
-| 1e-07 | 0.712 | 1.413 |
-| 1e-06 | 0.715 | 1.405 |
-| 1e-05 | 0.706 | 1.389 |
-| 1e-04 | 0.701 | 1.391 |
-| 0.001 | 0.701 | 1.408 |
-| 0.01 | 0.700 | 1.403 |
-| 0.1 | 0.701 | 1.424 |
-| 1.0 | 0.702 | 1.392 |
-
 
 
 ### 2 Million stars vs 2 Thousand stars
@@ -60,7 +37,6 @@ Ex. t_end = 0.1, 5 timesteps generated from 0 to 0.5
 ![Steps/Shifts Comparison](./Steps%20&%20Shifts%20Comparisons.png)
 ***Figure C***
 
-### Markdown Table
 
 |       t_end | Average time_taken (2Million, 1 step) | Average time_taken (2Million, 1 step, t shift + 2) | Average time_taken (2Million, 1 step, t_shift -2) | Average time_taken (2Million, 2 steps) | Average time_taken (2Million, 4 steps) | Average time_taken (2Million, 8 steps) | Average time_taken (2Million, 16 steps) | Average time_taken (2Million, 32 steps) |
 | ----------: | ------------------------------------: | -------------------------------------------------: | ------------------------------------------------: | -------------------------------------: | -------------------------------------: | -------------------------------------: | --------------------------------------: | --------------------------------------: |
@@ -83,8 +59,6 @@ Ex. t_end = 0.1, 5 timesteps generated from 0 to 0.5
 - No gain from partitioning the data from 2 Million stars to sets of X stars
 - Shifting time along the time line doesn't affect integration cost.
     - No point in using data closer to the integration target time range
-- Significant jump from 1 timestep to 2 timestep integration
-    - Might be worth integrating 1 timestep at a time
 - Time range (*abs(t_start - t_end)*) increases also significantly increases time taken (Figure B vs Figure C data)
 
 
