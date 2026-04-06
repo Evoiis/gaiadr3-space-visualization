@@ -6,9 +6,9 @@ import time
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 TEST_DATA_PATH = "test_data_3"
-MODEL_PATH = "./orbit_mlp_7.pt"
+MODEL_PATH = "./orbit_mlp_9.pt"
 NORM_PATH  = "./orbit_norm_6.json"
-BATCH_SIZE = 1_500_000
+BATCH_SIZE = 500_000
 
 print("\nLoading model for test evaluation...")
 
@@ -36,9 +36,9 @@ with torch.no_grad():
 torch.cuda.synchronize()
 t0 = time.time()
 with torch.no_grad():
-    _ = model(test_X)
+    _ = model(test_X[:BATCH_SIZE])
 torch.cuda.synchronize()
-print(f"Single batch 1.5M: {time.time()-t0:.4f}s")
+print(f"Single batch: {time.time()-t0:.4f}s")
 
 
 start = time.time()

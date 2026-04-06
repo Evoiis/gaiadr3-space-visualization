@@ -22,18 +22,18 @@ from collections import Counter
 # ─── Constants ───────────────────────────────────────────────────────────────
 
 DEVICE      = "cuda" if torch.cuda.is_available() else "cpu"
-BATCH_SIZE  = 100000
+BATCH_SIZE  = 200000
 
 # TODO: move to a config file
-EPOCHS      = 150
+EPOCHS      = 200
 LR          = 1e-3
-HIDDEN = [256] * 4
-OPTIMIZER_PATIENCE = 10
+HIDDEN = [1024, 1024, 512, 256, 128]
+OPTIMIZER_PATIENCE = 25
 VAL_DATA_PATH = "validation_data_3"
 TEST_DATA_PATH = "test_data_3"
 TRAINING_DATA_PATH   = "training_data_3"
 NORM_PATH   = "orbit_norm_6.json"
-MODEL_PATH  = "orbit_mlp_8.pt"
+MODEL_PATH  = "orbit_mlp_12.pt"
 
 # TRAINING_DATA_FILTER = "/orbit_train_part00[01234]*.npy"
 TRAINING_DATA_FILTER = "/orbit_train_part00[!01234]*.npy"
@@ -209,57 +209,57 @@ def load_norm_stats(filepath: str) -> dict:
 
 # ─── Model ───────────────────────────────────────────────────────────────────
 
-# class OrbitMLP(nn.Module):
-#     def __init__(self, hidden_sizes: list = HIDDEN):
-#         super().__init__()
-#         layers = []
-#         in_size = 15
-#         for h in hidden_sizes:
-#             layers.append(nn.Linear(in_size, h))
-#             layers.append(nn.SiLU())
-#             in_size = h
-#         layers.append(nn.Linear(in_size, 3))
-#         self.net = nn.Sequential(*layers)
-
-#     def forward(self, x):
-#         return self.net(x)
-    
-# --- Residual Model
-
-class ResBlock(nn.Module):
-    def __init__(self, size):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(size, size),
-            nn.SiLU(),
-            nn.Linear(size, size),
-        )
-        self.act = nn.SiLU()
-
-    def forward(self, x):
-        return self.act(x + self.net(x))
-
 class OrbitMLP(nn.Module):
     def __init__(self, hidden_sizes: list = HIDDEN):
         super().__init__()
-        
-        self.input_proj = nn.Linear(15, hidden_sizes[0])
-        
-        blocks = []
-
-        if len(Counter(hidden_sizes)) > 1:
-            raise Exception("ResBlock requires all layers to be the same size. Input: ", hidden_sizes)
-
-        for size in hidden_sizes:
-            blocks.append(ResBlock(size))
-        self.blocks = nn.Sequential(*blocks)
-        
-        self.output = nn.Linear(hidden_sizes[-1], 3)
+        layers = []
+        in_size = 15
+        for h in hidden_sizes:
+            layers.append(nn.Linear(in_size, h))
+            layers.append(nn.SiLU())
+            in_size = h
+        layers.append(nn.Linear(in_size, 3))
+        self.net = nn.Sequential(*layers)
 
     def forward(self, x):
-        x = self.input_proj(x)
-        x = self.blocks(x)
-        return self.output(x)
+        return self.net(x)
+    
+# --- Residual Model
+
+# class ResBlock(nn.Module):
+#     def __init__(self, size):
+#         super().__init__()
+#         self.net = nn.Sequential(
+#             nn.Linear(size, size),
+#             nn.SiLU(),
+#             nn.Linear(size, size),
+#         )
+#         self.act = nn.SiLU()
+
+#     def forward(self, x):
+#         return self.act(x + self.net(x))
+
+# class OrbitMLP(nn.Module):
+#     def __init__(self, hidden_sizes: list = HIDDEN):
+#         super().__init__()
+        
+#         self.input_proj = nn.Linear(15, hidden_sizes[0])
+        
+#         blocks = []
+
+#         if len(Counter(hidden_sizes)) > 1:
+#             raise Exception("ResBlock requires all layers to be the same size. Input: ", hidden_sizes)
+
+#         for size in hidden_sizes:
+#             blocks.append(ResBlock(size))
+#         self.blocks = nn.Sequential(*blocks)
+        
+#         self.output = nn.Linear(hidden_sizes[-1], 3)
+
+#     def forward(self, x):
+#         x = self.input_proj(x)
+#         x = self.blocks(x)
+#         return self.output(x)
 
 # ─── Training ────────────────────────────────────────────────────────────────
 
@@ -294,14 +294,18 @@ def train_full_gpu(model, X, y, optimizer, loss_fn, scaler):
         X_batch = X[idx]
         y_batch = y[idx]
 
+        optimizer.zero_grad(set_to_none=True)
+
         with autocast(device_type=DEVICE):
             predictions = model(X_batch)
             loss = loss_fn(predictions, y_batch)
 
-        optimizer.zero_grad(set_to_none=True)
-        scaler.scale(loss).backward()
+        scaler.scale(loss).backward()       
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         scaler.step(optimizer)
         scaler.update()
+
 
         total_loss += loss.detach()
         n_batches += 1
