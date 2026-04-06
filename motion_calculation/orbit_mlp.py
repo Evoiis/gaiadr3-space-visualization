@@ -8,29 +8,35 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
+from torch.amp import autocast, GradScaler
 import json
 import time
 import math
 import os
 import glob
 
+from collections import Counter
+
 
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 
 DEVICE      = "cuda" if torch.cuda.is_available() else "cpu"
-BATCH_SIZE  = 10240
+BATCH_SIZE  = 100000
+
+# TODO: move to a config file
 EPOCHS      = 150
 LR          = 1e-3
-HIDDEN      = [256, 256, 256, 128]
+HIDDEN = [256] * 4
+OPTIMIZER_PATIENCE = 10
 VAL_DATA_PATH = "validation_data_3"
 TEST_DATA_PATH = "test_data_3"
 TRAINING_DATA_PATH   = "training_data_3"
-NORM_PATH   = "orbit_norm_6.json"   
-MODEL_PATH  = "orbit_mlp_6.pt"
+NORM_PATH   = "orbit_norm_6.json"
+MODEL_PATH  = "orbit_mlp_8.pt"
 
-TRAINING_DATA_FILTER = "/orbit_train_part00[01234]*.npy"
-# TRAINING_DATA_FILTER = "/orbit_train_part00[!01234]*.npy"
+# TRAINING_DATA_FILTER = "/orbit_train_part00[01234]*.npy"
+TRAINING_DATA_FILTER = "/orbit_train_part00[!01234]*.npy"
 # --Time feature ffmapping
 
 def fourier_time_features(t: np.ndarray, T: float = 0.23, n_harmonics: int = 4) -> np.ndarray:
@@ -74,6 +80,7 @@ class OrbitDataset(Dataset):
 
     def __init__(self, folder_path: str, norm_stats, data_file_filter="/orbit_train_*.npy"):
         files = sorted(glob.glob(folder_path + data_file_filter))
+        print("Files loaded: ", files)
         data  = np.concatenate([np.load(f) for f in files], axis=0)
 
         X = data[:, :6].astype(np.float32)
@@ -202,28 +209,57 @@ def load_norm_stats(filepath: str) -> dict:
 
 # ─── Model ───────────────────────────────────────────────────────────────────
 
-class OrbitMLP(nn.Module):
-    """
-    Multi-layer perceptron for orbit prediction.
-    15 inputs → hidden layers → 3 outputs.
-    """
+# class OrbitMLP(nn.Module):
+#     def __init__(self, hidden_sizes: list = HIDDEN):
+#         super().__init__()
+#         layers = []
+#         in_size = 15
+#         for h in hidden_sizes:
+#             layers.append(nn.Linear(in_size, h))
+#             layers.append(nn.SiLU())
+#             in_size = h
+#         layers.append(nn.Linear(in_size, 3))
+#         self.net = nn.Sequential(*layers)
 
+#     def forward(self, x):
+#         return self.net(x)
+    
+# --- Residual Model
+
+class ResBlock(nn.Module):
+    def __init__(self, size):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(size, size),
+            nn.SiLU(),
+            nn.Linear(size, size),
+        )
+        self.act = nn.SiLU()
+
+    def forward(self, x):
+        return self.act(x + self.net(x))
+
+class OrbitMLP(nn.Module):
     def __init__(self, hidden_sizes: list = HIDDEN):
         super().__init__()
+        
+        self.input_proj = nn.Linear(15, hidden_sizes[0])
+        
+        blocks = []
 
-        layers = []
-        in_size = 15
-        for h in hidden_sizes:
-            layers.append(nn.Linear(in_size, h))
-            layers.append(nn.SiLU())
-            in_size = h
-        layers.append(nn.Linear(in_size, 3))
+        if len(Counter(hidden_sizes)) > 1:
+            raise Exception("ResBlock requires all layers to be the same size. Input: ", hidden_sizes)
 
-        self.net = nn.Sequential(*layers)
+        for size in hidden_sizes:
+            blocks.append(ResBlock(size))
+        self.blocks = nn.Sequential(*blocks)
+        
+        self.output = nn.Linear(hidden_sizes[-1], 3)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
-
+    def forward(self, x):
+        x = self.input_proj(x)
+        x = self.blocks(x)
+        return self.output(x)
 
 # ─── Training ────────────────────────────────────────────────────────────────
 
@@ -238,7 +274,7 @@ def train(model, loader, optimizer, loss_fn) -> float:
         predictions = model(X_batch)
         loss = loss_fn(predictions, y_batch)
 
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
 
@@ -246,7 +282,7 @@ def train(model, loader, optimizer, loss_fn) -> float:
     
     return total_loss.item() / len(loader)
 
-def train_full_gpu(model, X, y, optimizer, loss_fn):
+def train_full_gpu(model, X, y, optimizer, loss_fn, scaler):
     model.train()
     total_loss = 0.0
     n_batches = 0
@@ -258,12 +294,14 @@ def train_full_gpu(model, X, y, optimizer, loss_fn):
         X_batch = X[idx]
         y_batch = y[idx]
 
-        predictions = model(X_batch)
-        loss = loss_fn(predictions, y_batch)
+        with autocast(device_type=DEVICE):
+            predictions = model(X_batch)
+            loss = loss_fn(predictions, y_batch)
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
         total_loss += loss.detach()
         n_batches += 1
@@ -283,19 +321,19 @@ def evaluate(model, loader, loss_fn) -> float:
 
     return total_loss / len(loader)
 
-def evaluate_on_gpu(model, X, y, loss_fn):
+def evaluate_on_gpu(model, X, y, loss_fn, batch_size=BATCH_SIZE):
     model.eval()
     total_loss = 0.0
 
     with torch.no_grad():
-        for i in range(0, len(X), BATCH_SIZE):
-            X_batch = X[i:i + BATCH_SIZE]
-            y_batch = y[i:i + BATCH_SIZE]
+        for i in range(0, len(X), batch_size):
+            X_batch = X[i:i + batch_size]
+            y_batch = y[i:i + batch_size]
 
             predictions = model(X_batch)
             total_loss += loss_fn(predictions, y_batch).item()
     
-    return total_loss / math.ceil(len(X) / BATCH_SIZE)
+    return total_loss / math.ceil(len(X) / batch_size)
 
 # ─── Loss in parsecs ─────────────────────────────────────────────────────────
 
@@ -341,9 +379,11 @@ def predict(model, norm_stats: dict, x0, y0, z0, vx0, vy0, vz0, t) -> tuple:
     start = time.time()
 
     r0 = np.sqrt(x0**2 + y0**2)
-    fourier = fourier_time_features(np.array([t]))  # (1, 8)
+    fourier = fourier_time_features(np.array([t]))
     X = np.array([[x0, y0, z0, vx0, vy0, vz0]])
-    X = np.concatenate([X, [[r0]], fourier], axis=1)  # (1, 15)
+    X = np.concatenate([X, [[r0]], fourier], axis=1)
+    X = (X - norm_stats["X_mean"]) / norm_stats["X_std"]
+
 
     X_tensor = torch.from_numpy(X).to(DEVICE)
     print(f"Data sent to gpu, {time.time() - start}")
@@ -418,40 +458,42 @@ def main():
     test_X = test_set.X.to(DEVICE)
     test_y = test_set.y.to(DEVICE)
 
+    scaler = GradScaler(device=DEVICE)
+
     # --- model ---
     if os.path.exists(MODEL_PATH):
         print("Loading Pre-trained model")
         model, _ = load_model()
         optimizer = torch.optim.Adam(model.parameters(), lr=LR)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=0.5, patience=15, min_lr=1e-6
+            optimizer, mode="min", factor=0.5, patience=OPTIMIZER_PATIENCE, min_lr=1e-6
         )
-        print(load_checkpoint(
+        best_val_loss = load_checkpoint(
             model,
             optimizer,
             scheduler
-        ))
+        )
     else:
         model = OrbitMLP(hidden_sizes=HIDDEN).to(DEVICE)
         model = torch.compile(model)
         optimizer = torch.optim.Adam(model.parameters(), lr=LR)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=0.5, patience=15, min_lr=1e-6
+            optimizer, mode="min", factor=0.5, patience=OPTIMIZER_PATIENCE, min_lr=1e-6
         )
+        best_val_loss = float("inf")
 
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Model parameters: {total_params:,}")
 
     loss_fn   = nn.MSELoss()    
 
-    # --- training loop ---
-    best_val_loss = float("inf")
+    
     print("\nStarting training...\n")
 
     for epoch in range(1, EPOCHS + 1):
         t0 = time.time()
 
-        train_loss = train_full_gpu(model, train_X, train_y, optimizer, loss_fn)
+        train_loss = train_full_gpu(model, train_X, train_y, optimizer, loss_fn, scaler)
         val_loss = evaluate_on_gpu(model, val_X, val_y, loss_fn)
 
         scheduler.step(val_loss)
@@ -462,9 +504,9 @@ def main():
         elapsed = time.time() - t0
 
         print(
-            f"Epoch {epoch:3d}/{EPOCHS}  "
-            f"train_loss={train_loss:.6f}  "
-            f"val_loss={val_loss:.6f}  "
+            f"Epoch {epoch}/{EPOCHS}  "
+            f"train_loss={train_loss:.2e}  "
+            f"val_loss={val_loss:.2e}  "
             f"lr={optimizer.param_groups[0]['lr']:.2e}  "
             f"{train_pc=}, {val_pc=}  "
             f"time={elapsed:.1f}s"
@@ -479,6 +521,7 @@ def main():
                 "scheduler_state": scheduler.state_dict(),
                 "hidden_sizes": HIDDEN,
                 "norm_path": NORM_PATH,
+                "best_val_loss": best_val_loss
             }, MODEL_PATH)
 
     # --- final test evaluation ---
@@ -489,7 +532,7 @@ def main():
     test_pc   = loss_to_parsecs(test_loss, norm_stats)
 
     print(f"{test_pc=} parsecs")
-    print(f"Target:    0.25 pc² MSE  (0.50 pc RMSE)")
+    print(f"Target: 0.25 pc² MSE  (0.50 pc RMSE)")
 
 
 if __name__ == "__main__":

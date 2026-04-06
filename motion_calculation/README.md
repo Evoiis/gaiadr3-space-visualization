@@ -40,10 +40,10 @@ Far from the perfect result but still lots of things to try.
 
 Iterations
 1:
-- 1 Million stars, 7 features
+- 1 Million stars * 100 timesteps, 7 features
 ~ 75 parsecs err
 2:
-- 2 Million stars, 7 featres
+- 2 Million stars * 100 timesteps, 7 features
 ~ 60 parsecs err
 
 3:
@@ -63,10 +63,42 @@ Stopped early because it started plateauing at 40.
 (also forgot to swap the learning rate when swapping data sets)
     - no longer a problem because I added load_checkpoint
 
-6:
+6: (training_data_3, orbit_norm_6)
 - training_data_3, Reduced Input Time space from -3,3 to -1,1
-- Epochs=150
+- Epochs, increased from 100 to 150
 - scheduler changes, min_lr = 1e-6, patience=15
+~16 parsecs error, after first half of data
+~10 parsecs error, after second half of data
+Time taken(model_test.py): 1.3s
 
-7:
+Still room to improve here based on remaining learning rate.
+
+6 continued:
+HIDDEN=[256, 256, 256, 128] (No change from before)
+- Using mixed precision brought epoch time from ~11 to ~8 seconds
+~10 parsecs, after first half
+    - maybe patience is too high?
+~10 parsecs, after second half
+
+- patience is too high.
+
+7: (training_data_3, orbit_norm_6)
+- Changed hidden layers:
+From [256, 256, 256, 128] to [512, 512, 256, 256, 128]
+
+- Significantly slower by ~2x, to train and to test
+~10 parsecs error, after first half of data
+~ 5.6 parsecs error, after second half of data
+Time taken(model_test.py): 2.15
+
+Still learning rate left to go but it's too slow.
+Also Patience=15 in this one so it could be patience too high again.
+
+
+8: (training_data_3, orbit_norm_6)
+- Optimizer Patience reduced to 10
+- HIDDEN updated to [256] * 4
+- Switch to **Residual MLP**
+
+~23 parsecs error, after first half of data
 
