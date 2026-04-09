@@ -476,9 +476,9 @@ def load_model(config):
         model = torch.compile(model)
 
     if config["optimizer"] == "adam":
-        optimizer = torch.optim.Adam(model.parameters(), lr=config["min_learning_rate"])
+        optimizer = torch.optim.Adam(model.parameters(), lr=config["start_learning_rate"])
     elif config["optimizer"] == "adamW":
-        optimizer = torch.optim.AdamW(model.parameters(), lr=config["min_learning_rate"])
+        optimizer = torch.optim.AdamW(model.parameters(), lr=config["start_learning_rate"])
     else:
         raise Exception(f"Unexpected optimizer choice in config: {config["optimizer"]=}")
 
