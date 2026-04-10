@@ -55,10 +55,12 @@ Iterations
 - Added r0 and time fourier features
 - Trained on 1/2 Training data (Had issues with memory)
 ~59 parsecs error
+**Stopped Early**
 
 #### 5:
 - Trained on 3/4 of training_data + training_data_2
 ~ 40 parsecs error
+**Stopped Early**
 
 Stopped early because it started plateauing at 40.
 (also forgot to swap the learning rate when swapping data sets)
@@ -166,7 +168,7 @@ Time taken(model_test.py), 2.15
 
 #### 7.3:
 - No dataset split
-~12 parsecs error
+~11 parsecs error
 
 #### 7.4:
 - AdamW
@@ -180,7 +182,15 @@ Time taken(model_test.py), 2.15
 - 7.5 but cosanneal
 ~10 parsecs error
 
-#### x: todo (training_data_4, orbit_norm_13)
-- Generate new training set
-    - Add larger test and validation sets (200000 stars instead of 100000)
+#### 14:
+- [1024, 512, 512, 256, 256, 128]
+~8.1 parsecs error
+
+#### 15:
+- [256, 256, 128]
+~61 parsecs error
+
+
+#### x:
+- smaller dataset
 

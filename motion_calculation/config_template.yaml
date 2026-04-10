@@ -5,9 +5,8 @@ val_data_path: "validation_data_3"
 test_data_path: "test_data_3"
 training_data_path: "training_data_3"
 
-
 hidden_layers: [512, 512, 256, 256, 128]
-epochs: 150
+epochs: 150 # Epochs per run
 batch_size: 100000
 
 use_half_precision: False # [True,False]
@@ -19,17 +18,18 @@ optimizer: adamW # [adam, adamW]
 
 runs:
   1:
-    training_data_filter: /orbit_train_part00[01234]*.npy
+    training_data_filter: /orbit_train_part00[01234]*.npy # Can split data with filters
     min_learning_rate: 0.000001
-    start_learning_rate: 0.001
+    start_learning_rate: 0.001 # Required for first run
     scheduler: plateau # [plateau, cosanneal]
-    patience: 15
+    patience: 15  # Required for pleteau scheduler
     
-  2:
+  2:  # Multiple runs
     training_data_filter: /orbit_train_part00[!01234]*.npy
     min_learning_rate: 0.000001
-    scheduler: plateau # [plateau, cosanneal]
-    patience: 15
+    start_learning_rate: 0.001
+    scheduler: cosanneal # [plateau, cosanneal]
+    override_learning_rate: True # [True, False] resets optimizer LR to start_learning_rate
 
 # Not IMPL:
 # use_residual_model: False

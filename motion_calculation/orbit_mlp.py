@@ -11,7 +11,7 @@ import yaml
 import torch.nn as nn
 
 from collections import Counter
-from pprint import pprint
+from pprint import pformat
 from file_logger import FileLogger
 import numpy as np
 import json
@@ -21,6 +21,7 @@ import os
 import glob
 import argparse
 
+flogger = FileLogger()
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # --- Dataset ---
@@ -68,7 +69,7 @@ class OrbitDataset(Dataset):
 
     def __init__(self, folder_path: str, norm_stats, data_file_filter="/orbit_train_*.npy", use_half_precision=False):
         files = sorted(glob.glob(folder_path + data_file_filter))
-        print("Files loaded: ", files)
+        flogger.info(f"Files loaded: {files}")
         data  = np.concatenate([np.load(f) for f in files], axis=0)
 
         X = data[:, :6].astype(np.float32)
@@ -81,7 +82,7 @@ class OrbitDataset(Dataset):
         X = (X - norm_stats["X_mean"]) / norm_stats["X_std"]
         y = (y - norm_stats["y_mean"]) / norm_stats["y_std"]
 
-        print("Inputs normalized, loading into torch.")
+        flogger.info("Inputs normalized, loading into torch.")
         if use_half_precision:
             self.X = torch.from_numpy(X).half()
             self.y = torch.from_numpy(y).half()
@@ -103,7 +104,7 @@ def compute_norm_stats(X, y, file_name):
     if os.path.exists(file_name):
         return load_norm_stats(file_name)
     
-    print("Computing norm stats..")
+    flogger.info("Computing norm stats..")
 
     n = len(X)
     
@@ -125,7 +126,7 @@ def compute_norm_stats(X, y, file_name):
 
     with open(file_name, "w") as f:
         json.dump(stats, f, indent=2)
-    print(f"Saved normalization stats to {file_name}")
+    flogger.info(f"Saved normalization stats to {file_name}")
     return stats
 
 
@@ -138,7 +139,7 @@ def compute_norm_stats_from_files(folder_paths: list, file_name) -> dict:
     if os.path.exists(file_name):
         return load_norm_stats(file_name)
     
-    print("Computing norm stats..")
+    flogger.info("Computing norm stats..")
 
     files = []
     for folder_path in folder_paths:
@@ -187,7 +188,7 @@ def compute_norm_stats_from_files(folder_paths: list, file_name) -> dict:
     with open(file_name, "w") as f:
         json.dump(stats, f, indent=2)
 
-    print(f"Saved normalization stats to {file_name}")
+    flogger.info(f"Saved normalization stats to {file_name}")
     return stats
 
 
@@ -357,6 +358,11 @@ def load_model_from_file(model_path: str):
 
     checkpoint = torch.load(model_path, map_location=DEVICE)
 
+    flogger.info(
+        f"Checkpoint loaded: {pformat(checkpoint["hidden_sizes"])}" +
+        f", {pformat(checkpoint["norm_path"])}"
+    )
+
     model = OrbitMLP(hidden_sizes=checkpoint["hidden_sizes"]).to(DEVICE)
     model = torch.compile(model)
     model.load_state_dict(checkpoint["model_state"])
@@ -392,12 +398,12 @@ def predict(model, norm_stats: dict, x0, y0, z0, vx0, vy0, vz0, t) -> tuple:
     X = (X - norm_stats["X_mean"]) / norm_stats["X_std"]
 
     X_tensor = torch.from_numpy(X).to(DEVICE)
-    print(f"Data sent to gpu, {time.time() - start}")
+    flogger.info(f"Data sent to gpu, {time.time() - start}")
 
     with torch.no_grad():
         y_norm = model(X_tensor).cpu().numpy()
 
-    print(f"Predicted, {time.time() - start}")
+    flogger.info(f"Predicted, {time.time() - start}")
     y = y_norm * norm_stats["y_std"] + norm_stats["y_mean"]
     return x0 + y[0, 0], y0 + y[0, 1], z0 + y[0, 2]
 
@@ -435,12 +441,8 @@ def loss_to_parsecs(mse_normalized: float, norm_stats: dict) -> float:
     return np.sqrt(mse_normalized) * avg_std
 
 def load_config(config_file_path: str):
-    print(f"Loading config file from: {config_file_path}")
     with open(config_file_path, "r") as f:
         data = yaml.load(f, Loader=yaml.SafeLoader)
-    
-    print("Config Loaded:")
-    pprint(data)
 
     return data
 
@@ -465,15 +467,15 @@ def load_dataloaders(config, train_set, val_set, test_set):
     return  train_loader, val_loader, test_loader
 
 def load_model(config):
-    print("Loading model")
+    flogger.info("Loading model")
 
     best_val_loss = float("inf")
 
     if os.path.exists(config["model_name"]):
-        print("Found existing model, loading from file.")
+        flogger.info("Found existing model, loading from file.")
         model = load_model_from_file(config["model_name"])
     else:
-        print("Creating a new model from scratch.")
+        flogger.info("Creating a new model from scratch.")
         model = OrbitMLP(hidden_sizes=config["hidden_layers"]).to(DEVICE)
         model = torch.compile(model)
 
@@ -503,12 +505,21 @@ def load_model(config):
             optimizer,
             scheduler,
             config["model_name"]
-        )    
+        )
+
+        if "override_learning_rate" in config and config["override_learning_rate"]:
+            for param_group in optimizer.param_groups:
+                param_group["lr"] = config["start_learning_rate"]
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer, mode="min", factor=0.5, 
+                patience=config["patience"], 
+                min_lr=config["min_learning_rate"]
+            )
     
     return model, scheduler, optimizer, best_val_loss
 
 def run_training_run(config):
-    print("Loading dataset...")
+    flogger.info("Loading dataset...")
     norm_stats = load_norm_stats(config["norm_path"])
     train_set = OrbitDataset(
         config["training_data_path"],
@@ -532,10 +543,10 @@ def run_training_run(config):
     
 
     total_params = sum(p.numel() for p in model.parameters())
-    print(f"Model parameters: {total_params:,}")
+    flogger.info(f"Model parameters: {total_params:,}")
 
     
-    print("\nStarting training...\n")
+    flogger.info("\nStarting training...\n")
     for epoch in range(1, config["epochs"] + 1):
         t0 = time.time()
 
@@ -567,7 +578,7 @@ def run_training_run(config):
 
         elapsed = time.time() - t0
 
-        print(
+        flogger.info(
             f"Epoch {epoch}/{config["epochs"]}  "
             f"train_loss={train_loss:.2e}  "
             f"val_loss={val_loss:.2e}  "
@@ -589,7 +600,7 @@ def run_training_run(config):
             }, config["model_name"])
 
     # --- final test evaluation ---
-    print("\nLoading best model for test evaluation...")
+    flogger.info("\nLoading best model for test evaluation...")
     model = load_model_from_file(config["model_name"])
 
     if config["use_dataloader"]:
@@ -598,7 +609,7 @@ def run_training_run(config):
         test_loss = evaluate_with_full_dataset_on_gpu(model, test_X, test_y, loss_fn, config["batch_size"])
     test_pc   = loss_to_parsecs(test_loss, norm_stats)
 
-    print(f"{test_pc=} parsecs")
+    flogger.info(f"{test_pc=} parsecs")
 
 def main():
     torch.set_float32_matmul_precision("high")
@@ -610,12 +621,20 @@ def main():
 
     config = load_config(args.config_file)
 
-    runs = config.pop("runs")
+    flogger.set_folder_and_file(
+        "logs",
+        f"{time.strftime("%y_%m_%d_%H_%M_%S")}_{config["model_name"][:-3]}.txt"
+    )
 
+    flogger.info(
+        f"Loaded config: {pformat(config)}"
+    )
+
+    runs = config.pop("runs")
     run_list = list(runs.keys())
     run_list.sort()
     for run in run_list:
-        print(f"Starting run: {run}")        
+        flogger.info(f"Starting run: {run}")        
         run_training_run(config | runs[run])
 
 if __name__ == "__main__":
