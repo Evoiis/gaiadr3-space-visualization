@@ -1,8 +1,10 @@
-from orbit_mlp import compute_norm_stats_from_files
+from orbit_mlp import compute_norm_stats_from_files, flogger
+
+flogger.set_write_to_file(False)
 
 compute_norm_stats_from_files(
     [
-        "training_data_3",
+        "training_data_9",
     ],
-    "orbit_norm_6.json"
+    "orbit_norm_data_9.json"
 )

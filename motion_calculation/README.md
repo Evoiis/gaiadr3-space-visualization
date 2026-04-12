@@ -203,10 +203,17 @@ Time taken(model_test.py), 2.15
 - [1024, 512, 512, 256, 256, 128]
 ~8.1 parsecs error
 
-#### 15:
-- [256, 256, 128]
-~61 parsecs error
+#### 15: (training_data_4)
+- [512, 512, 256, 256, 128]
+~13 parsecs error
 
+#### 16
+- Residual model
+- Very slow and very unstable
+
+#### 17: (Training_data_5) (uniform dist_kpc dataset)
+~10.9 (test_data_5) parsecs
+~9.6 (test_data_3) parsecs
 
 #### x:
 - smaller dataset

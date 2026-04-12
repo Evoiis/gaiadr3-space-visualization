@@ -17,20 +17,22 @@ from orbit_mlp import (
     load_norm_stats,
     load_model_from_file,
     predict_batch,
+    load_config,
     DEVICE,
     flogger
 )
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-MODEL_NAME = "orbit_mlp_7.8.pt"
-# MODEL_PATH    = "./prev_models/" + MODEL_NAME
-MODEL_PATH    = MODEL_NAME
-NORM_PATH     = "orbit_norm_6.json"
+CONFIG_FILE_PATH = "config_17.yaml"
+# MODEL_NAME = "orbit_mlp_15.pt"
+# # MODEL_PATH    = "./prev_models/" + MODEL_NAME
+# MODEL_PATH    = MODEL_NAME
+# NORM_PATH     = "orbit_norm_data_4.json"
 VAL_DATA_PATH = "validation_data_3"
-OUTPUT_DIR    = "error_analysis_output/" + MODEL_NAME
+# OUTPUT_DIR    = "error_analysis_output/" + MODEL_NAME
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ── Load val data ─────────────────────────────────────────────────────────────
 
@@ -41,7 +43,7 @@ def load_val_data(folder_path):
 
 # ── Plotting ──────────────────────────────────────────────────────────────────
 
-def plot_error_vs_binned(values, errors_pc, xlabel, title, filename, n_bins=30):
+def plot_error_vs_binned(values, errors_pc, xlabel, title, filename, output_dir, n_bins=30):
     bins = np.percentile(values, np.linspace(0, 100, n_bins + 1))
     bins = np.unique(bins)
     bin_centers = 0.5 * (bins[:-1] + bins[1:])
@@ -68,12 +70,12 @@ def plot_error_vs_binned(values, errors_pc, xlabel, title, filename, n_bins=30):
     ax.legend()
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, filename), dpi=150)
+    plt.savefig(os.path.join(output_dir, filename), dpi=150)
     plt.close()
     print(f"Saved: {filename}")
 
 
-def plot_per_axis(errors_xyz, filename):
+def plot_per_axis(errors_xyz, filename, output_dir):
     fig, axes = plt.subplots(1, 3, figsize=(14, 4))
     labels = ['x error (pc)', 'y error (pc)', 'z error (pc)']
     for i, (ax, label) in enumerate(zip(axes, labels)):
@@ -84,7 +86,7 @@ def plot_per_axis(errors_xyz, filename):
                      f"Std={errors_xyz[:,i].std():.2f} pc")
         ax.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, filename), dpi=150)
+    plt.savefig(os.path.join(output_dir, filename), dpi=150)
     plt.close()
     print(f"Saved: {filename}")
 
@@ -126,18 +128,24 @@ def main():
     print(f"Device: {DEVICE}")
     os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
+    config = load_config(CONFIG_FILE_PATH)
+
+    output_dir = "error_analysis_output/" + config["model_name"]
+
+    os.makedirs(output_dir, exist_ok=True)
+
     flogger.set_write_to_file(False)
 
-    norm_stats = load_norm_stats(NORM_PATH)
-    model      = load_model_from_file(MODEL_PATH)
+    norm_stats = load_norm_stats(config["norm_path"])
+    model      = load_model_from_file(config)
 
     data = load_val_data(VAL_DATA_PATH)
 
     inputs = data[:, :7].astype(np.float32)   # x0, y0, z0, vx0, vy0, vz0, t
     y_true = data[:, 7:].astype(np.float32)   # heliocentric x, y, z positions
 
-    t                = data[:, 6].astype(np.float32)
-    r0               = np.sqrt(data[:, 0]**2 + data[:, 1]**2) - 8000
+    t = data[:, 6].astype(np.float32)
+    r0 = np.sqrt(data[:, 0]**2 + data[:, 1]**2) - 8000
 
     initial_pos_helio = data[:, :3].copy().astype(np.float32)
     initial_pos_helio[:, 0] -= 8000
@@ -157,34 +165,76 @@ def main():
     print_summary(errors_pc, errors_xyz)
     print_worst_cases(errors_pc, t, r0, displacement_mag)
 
-    plot_per_axis(np.abs(errors_xyz), "per_axis_error.png")
+    plot_per_axis(np.abs(errors_xyz), "per_axis_error.png", output_dir=output_dir)
 
     plot_error_vs_binned(
         t, errors_pc,
         xlabel="Time t (Gyr)",
         title="Error vs Time",
-        filename="error_vs_time.png"
+        filename="error_vs_time.png",
+        output_dir=output_dir
     )
     plot_error_vs_binned(
         np.abs(t), errors_pc,
         xlabel="|t| (Gyr)",
         title="Error vs |Time|",
-        filename="error_vs_abs_time.png"
+        filename="error_vs_abs_time.png",
+        output_dir=output_dir
     )
     plot_error_vs_binned(
         r0, errors_pc,
         xlabel="Initial orbital radius r0 (pc)",
         title="Error vs Orbital Radius",
-        filename="error_vs_r0.png"
+        filename="error_vs_r0.png",
+        output_dir=output_dir
     )
     plot_error_vs_binned(
         displacement_mag, errors_pc,
         xlabel="True displacement magnitude (pc)",
         title="Error vs Displacement Magnitude",
-        filename="error_vs_displacement.png"
+        filename="error_vs_displacement.png",
+        output_dir=output_dir
     )
 
-    print(f"\nAll plots saved to: {OUTPUT_DIR}/")
+    r_helio = np.sqrt((data[:, 0] - 8000)**2 + data[:, 1]**2 + data[:, 2]**2)
+
+    plot_error_vs_binned(
+        r_helio, errors_pc,
+        xlabel="Initial heliocentric distance (pc)",
+        title="Error vs Heliocentric Distance",
+        filename="error_vs_rhelio.png",
+        output_dir=output_dir
+    )
+
+    speed    = np.sqrt(data[:, 3]**2 + data[:, 4]**2 + data[:, 5]**2)
+    v_radial = np.abs(data[:, 3] * (data[:, 0] - 8000) +
+                    data[:, 4] *  data[:, 1] +
+                    data[:, 5] *  data[:, 2]) / (r_helio + 1e-6)
+
+    plot_error_vs_binned(
+        speed, errors_pc,
+        xlabel="Initial speed (pc/Gyr)",
+        title="Error vs Speed",
+        filename="error_vs_speed.png",
+        output_dir=output_dir
+    )
+    plot_error_vs_binned(
+        v_radial, errors_pc,
+        xlabel="Radial velocity component (pc/Gyr)",
+        title="Error vs Radial Velocity",
+        filename="error_vs_vradial.png",
+        output_dir=output_dir
+    )
+
+    plot_error_vs_binned(
+    speed / (r_helio + 1e-6), errors_pc,
+        xlabel="Speed / heliocentric distance (pc/Gyr per pc)",
+        title="Error vs Speed normalized by distance",
+        filename="error_vs_speed_normalized.png",
+        output_dir=output_dir
+    )
+
+    print(f"\nAll plots saved to: {output_dir}/")
 
 
 if __name__ == "__main__":

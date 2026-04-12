@@ -37,21 +37,43 @@ def integrate_orbit(orbit: Orbit, time_range):
 
     return orbit.helioX(time_range), orbit.helioY(time_range), orbit.helioZ(time_range)
 
-def generate_training_set(n_stars, n_timesteps=100):
+def generate_training_set(n_stars, dist_sampling_mode: str, n_timesteps=101):
     """
     Output
     x0, y0, z0, vx0, vy0, vz0, t_col, x_out, y_out, z_out
     x0,y0,z0: galactocentric
     x_out, y_out, z_out: heliocentric
     """
+
+    if n_timesteps % 2 == 0:
+        n_timesteps += 1
+
     start = time.time()
     ra               = np.random.uniform(0, 360, n_stars)
     dec              = np.degrees(np.arcsin(np.random.uniform(-1, 1, n_stars)))
-    parallax         = np.exp(np.random.uniform(np.log(0.275), np.log(800), n_stars))
     radial_velocity  = np.random.uniform(-500, 500, n_stars)
     times            = np.linspace(-1, 1, n_timesteps)
-    
-    dist_kpc = 1 / parallax
+        
+    if dist_sampling_mode == "full_log":
+        # full log uniform sampling
+        parallax = np.exp(np.random.uniform(np.log(0.275), np.log(800), n_stars))
+        dist_kpc = 1 / parallax
+    elif dist_sampling_mode == "volume_weighted":
+        dist_kpc = np.cbrt(np.random.uniform(0.001**3, 3.0**3, n_stars))
+    elif dist_sampling_mode == "close_far_uniform":
+        close_percent = 8
+        n_close = math.floor(n_stars * close_percent / 100)
+        n_far   = n_stars - n_close
+
+        dist_close = np.random.uniform(0.001, 0.5, n_close)
+        dist_far = np.random.uniform(0.5, 3.0, n_far)
+
+        dist_kpc = np.concatenate([dist_close, dist_far])
+        np.random.shuffle(dist_kpc)
+    elif dist_sampling_mode == "flat":
+        dist_kpc = np.random.uniform(0.001, 3.0, n_stars)
+        np.random.shuffle(dist_kpc)
+
     max_pm   = 500 / (4.74 * dist_kpc)  # max pm for 500 km/s
     pmra     = np.random.uniform(-1, 1, n_stars) * max_pm
     pmdec    = np.random.uniform(-1, 1, n_stars) * max_pm
@@ -61,8 +83,6 @@ def generate_training_set(n_stars, n_timesteps=100):
     print(f"Init orbit, t_diff:{time.time() - start}")
     orbit = Orbit(vxvv, radec=True, ro=8., vo=220.)
 
-    times = np.append(times, 0)
-    times = np.sort(times)
 
     print(f"Extract inputs for MLP, t_diff:{time.time() - start}")
     x0, y0, z0, vx0, vy0, vz0 = convert_inputs(
@@ -97,14 +117,17 @@ def write_data(n_stars, batch_size, data_folder):
     
     for i in range(math.ceil(n_stars / batch_size)):
         print(f"Generating part {i}")
-        data = generate_training_set(batch_size)
+        data = generate_training_set(batch_size, "flat")
     
         np.save(f"{data_folder}/orbit_train_part{i:04d}.npy", data)
 
 def main():
-    write_data(1000000, 10000, "training_data_3")
-    write_data(100000, 10000, "validation_data_3")
-    write_data(100000, 10000, "test_data_3")
+    data_set_name = "9"
+    n_stars = 1000000
+    batch_size = 10000
+    write_data(n_stars, batch_size, "training_data_" + data_set_name)
+    write_data(n_stars//10, batch_size, "validation_data_" + data_set_name)
+    write_data(n_stars//10, batch_size, "test_data_" + data_set_name)
     
 
 if __name__ == "__main__":

@@ -218,36 +218,39 @@ class OrbitMLP(nn.Module):
         return self.net(x)
     
 # --- Residual MLP ---
-
 class ResBlock(nn.Module):
-    def __init__(self, size):
+    def __init__(self, in_size, out_size):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(size, size),
+            nn.LayerNorm(in_size),
+            nn.Linear(in_size, out_size),
             nn.SiLU(),
-            nn.Linear(size, size),
+            nn.LayerNorm(out_size),
+            nn.Linear(out_size, out_size),
         )
+        # Only project if dimensions differ
+        self.proj = nn.Linear(in_size, out_size, bias=False) if in_size != out_size else nn.Identity()
 
     def forward(self, x):
-        return x + self.net(x)
+        return self.proj(x) + self.net(x)
+
 
 class OrbitResidualMLP(nn.Module):
     def __init__(self, hidden_sizes: list):
-        if len(Counter(hidden_sizes)) > 1:
-            raise Exception("ResBlock requires all layers to be the same size. Input: ", hidden_sizes)
-
         super().__init__()
-        
+
         self.input_proj = nn.Sequential(
             nn.Linear(15, hidden_sizes[0]),
             nn.SiLU(),
-        )        
-        blocks = []
+            nn.LayerNorm(hidden_sizes[0]),
+        )
 
-        for size in hidden_sizes:
-            blocks.append(ResBlock(size))
+        blocks = []
+        for in_size, out_size in zip(hidden_sizes[:-1], hidden_sizes[1:]):
+            blocks.append(ResBlock(in_size, out_size))
+        blocks.append(ResBlock(hidden_sizes[-1], hidden_sizes[-1]))
         self.blocks = nn.Sequential(*blocks)
-        
+
         self.output = nn.Linear(hidden_sizes[-1], 3)
 
     def forward(self, x):
@@ -353,18 +356,22 @@ def evaluate_with_full_dataset_on_gpu(model, X, y, loss_fn, batch_size):
 
 # --- Inference ---
 
-def load_model_from_file(model_path: str):
+def load_model_from_file(config):
     """Load trained model."""
     torch.set_float32_matmul_precision("high")
 
-    checkpoint = torch.load(model_path, map_location=DEVICE)
+    checkpoint = torch.load(config["model_name"], map_location=DEVICE)
 
     flogger.info(
         f"Checkpoint loaded: {pformat(checkpoint["hidden_sizes"])}" +
         f", {pformat(checkpoint["norm_path"])}"
     )
 
-    model = OrbitMLP(hidden_sizes=checkpoint["hidden_sizes"]).to(DEVICE)
+    if "use_residual_model" in config and config["use_residual_model"]:
+        model = OrbitResidualMLP(hidden_sizes=checkpoint["hidden_sizes"]).to(DEVICE)
+    else:
+        model = OrbitMLP(hidden_sizes=checkpoint["hidden_sizes"]).to(DEVICE)
+
     model = torch.compile(model)
     model.load_state_dict(checkpoint["model_state"])
     model.eval()
@@ -474,10 +481,15 @@ def load_model(config):
 
     if os.path.exists(config["model_name"]):
         flogger.info("Found existing model, loading from file.")
-        model = load_model_from_file(config["model_name"])
+        model = load_model_from_file(config)
     else:
         flogger.info("Creating a new model from scratch.")
-        model = OrbitMLP(hidden_sizes=config["hidden_layers"]).to(DEVICE)
+
+        if "use_residual_model" in config and config["use_residual_model"]:
+            model = OrbitResidualMLP(hidden_sizes=config["hidden_layers"]).to(DEVICE)
+        else:
+            model = OrbitMLP(hidden_sizes=config["hidden_layers"]).to(DEVICE)
+        
         model = torch.compile(model)
 
     if config["optimizer"] == "adam":
@@ -520,6 +532,7 @@ def load_model(config):
                 patience=config["patience"], 
                 min_lr=config["min_learning_rate"]
             )
+            best_val_loss = float('inf')
     
     return model, scheduler, optimizer, best_val_loss
 
@@ -549,7 +562,6 @@ def run_training_run(config):
 
     total_params = sum(p.numel() for p in model.parameters())
     flogger.info(f"Model parameters: {total_params:,}")
-
     
     flogger.info("\nStarting training...\n")
     for epoch in range(1, config["epochs"] + 1):
@@ -606,7 +618,7 @@ def run_training_run(config):
 
     # --- final test evaluation ---
     flogger.info("\nLoading best model for test evaluation...")
-    model = load_model_from_file(config["model_name"])
+    model = load_model_from_file(config)
 
     if config["use_dataloader"]:
         test_loss = evaluate_with_dataloader(model, test_loader, loss_fn)

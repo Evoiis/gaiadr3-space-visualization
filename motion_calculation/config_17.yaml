@@ -1,18 +1,17 @@
-model_name: orbit_mlp_16.pt
+model_name: orbit_mlp_17.pt
 
-norm_path: "orbit_norm_data_4.json"
-val_data_path: "validation_data_4"
-test_data_path: "test_data_4"
-training_data_path: "training_data_4"
+norm_path: "orbit_norm_data_5.json"
+val_data_path: "validation_data_5"
+test_data_path: "test_data_5"
+training_data_path: "training_data_5"
 
-hidden_layers: [256, 256, 256, 256, 256]
+hidden_layers: [512, 512, 256, 256, 128]
 epochs: 300
 batch_size: 102400
 
 use_half_precision: True # [True,False]
 use_dataloader: False # [True,False]
-use_gradient_clipping: True
-use_residual_model: True
+use_gradient_clipping: False
 
 grad_clip_max_norm: 0.1
 optimizer: adam # [adam, adamW]
@@ -24,3 +23,4 @@ runs:
     start_learning_rate: 0.001
     scheduler: plateau # [plateau, cosanneal]
     patience: 15
+

@@ -11,10 +11,12 @@ batch_size: 100000
 
 use_half_precision: False # [True,False] loads training data into gpu at half precision, recasts to float on batch usage
 use_dataloader: False # [True,False]
+use_residual_model: False
 use_gradient_clipping: True
 
 grad_clip_max_norm: 0.1
 optimizer: adamW # [adam, adamW]
+
 
 runs:
   1:  # plateau example
@@ -40,6 +42,4 @@ runs:
     warm_restart_epochs: 50 # number of epochs in the first cycle before resetting LR
     warm_restart_cycle_mult: 1 # cycle length multiplier
 
-# Not IMPL:
-# use_residual_model: False
 

@@ -6,7 +6,7 @@ import time
 import os
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-CONFIG_FILE = "config_14.yaml"
+CONFIG_FILE = "config_17.yaml"
 
 print("\nLoading model for test evaluation...")
 
@@ -16,7 +16,7 @@ torch.set_float32_matmul_precision("high")
 flogger.set_write_to_file(False)
 config = load_config(CONFIG_FILE)
 
-
+# --- INPUT -------------------------------------------------
 TEST_DATA_PATH = "test_data_3"
 NORM_PATH = config["norm_path"]
 MODEL_PATH = config["model_name"]
@@ -25,12 +25,14 @@ if not os.path.exists(MODEL_PATH):
     MODEL_PATH = "./prev_models/" + config["model_name"]
 
 # OVERRIDE
-NORM_PATH = "orbit_norm_6.json"
-MODEL_PATH = "./prev_models/orbit_mlp_7.pt"
+# NORM_PATH = "orbit_norm_6.json"
+MODEL_PATH = "orbit_mlp_17_300epochs.pt"
+
+# ^^^ INPUT ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 print(f"\nRunning model test on: {MODEL_PATH}")
 print(f"Using norms: {NORM_PATH}\n")
-model = load_model_from_file(MODEL_PATH)
+model = load_model_from_file(config)
 norm_stats = load_norm_stats(NORM_PATH)
 
 test_set = OrbitDataset(TEST_DATA_PATH, norm_stats)
