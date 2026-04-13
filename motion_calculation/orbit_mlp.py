@@ -5,7 +5,7 @@ Predicts heliocentric XYZ position (parsecs) from initial conditions + time
 """
 
 from torch.utils.data import Dataset, DataLoader
-from torch.amp import autocast, GradScaler
+from torch.amp import autocast
 import torch
 import yaml
 import torch.nn as nn
@@ -84,8 +84,8 @@ class OrbitDataset(Dataset):
 
         flogger.info("Inputs normalized, loading into torch.")
         if use_half_precision:
-            self.X = torch.from_numpy(X).half()
-            self.y = torch.from_numpy(y).half()
+            self.X = torch.from_numpy(X).to(torch.bfloat16)
+            self.y = torch.from_numpy(y).to(torch.bfloat16)
         else:
             self.X = torch.from_numpy(X).float()
             self.y = torch.from_numpy(y).float()
@@ -256,31 +256,29 @@ class OrbitResidualMLP(nn.Module):
 
 # --- Training ---
 
-def train_with_dataloader(model, loader, optimizer, loss_fn, scaler, config) -> float:
+def train_with_dataloader(model, loader, optimizer, loss_fn, config) -> float:
     model.train()
     total_loss = 0.0
 
     for X_batch, y_batch in loader:
-        X_batch = X_batch.to(DEVICE, non_blocking=True).float()
-        y_batch = y_batch.to(DEVICE, non_blocking=True).float()
+        X_batch = X_batch.to(DEVICE, non_blocking=True)
+        y_batch = y_batch.to(DEVICE, non_blocking=True)
 
         optimizer.zero_grad(set_to_none=True)
-        with autocast(device_type=DEVICE):
+        with autocast(device_type=DEVICE, dtype=torch.bfloat16):
             predictions = model(X_batch)
             loss = loss_fn(predictions, y_batch)
 
-        scaler.scale(loss).backward()
+        loss.backward()
         if config["use_gradient_clipping"]:
-            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=config["grad_clip_max_norm"])
-        scaler.step(optimizer)
-        scaler.update()
+        optimizer.step()
 
         total_loss += loss.detach()
     
     return total_loss.item() / len(loader)
 
-def train_with_full_dataset_on_gpu(model, X, y, optimizer, loss_fn, scaler, config):
+def train_with_full_dataset_on_gpu(model, X, y, optimizer, loss_fn, config):
     model.train()
     total_loss = 0.0
     n_batches = 0
@@ -290,25 +288,19 @@ def train_with_full_dataset_on_gpu(model, X, y, optimizer, loss_fn, scaler, conf
     for i in range(0, len(X), config["batch_size"]):
         idx = perm[i:i+config["batch_size"]]
 
-        if config["use_half_precision"]:
-            X_batch = X[idx].float()
-            y_batch = y[idx].float()
-        else:
-            X_batch = X[idx]
-            y_batch = y[idx]
+        X_batch = X[idx]
+        y_batch = y[idx]
 
         optimizer.zero_grad(set_to_none=True)
 
-        with autocast(device_type=DEVICE):
+        with autocast(device_type=DEVICE, dtype=torch.bfloat16):
             predictions = model(X_batch)
             loss = loss_fn(predictions, y_batch)
 
-        scaler.scale(loss).backward()
+        loss.backward()
         if config["use_gradient_clipping"]:
-            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=config["grad_clip_max_norm"])
-        scaler.step(optimizer)
-        scaler.update()
+        optimizer.step()
 
         total_loss += loss.detach()
         n_batches += 1
@@ -431,7 +423,7 @@ def predict_batch(model, norm_stats: dict, inputs: np.ndarray) -> np.ndarray:
     X_tensor = torch.from_numpy(X).to(DEVICE)
 
     with torch.no_grad():
-        y_norm = model(X_tensor).cpu().numpy()
+        y_norm = model(X_tensor).float().cpu().numpy()
 
     displacement = y_norm * norm_stats["y_std"] + norm_stats["y_mean"]
     return inputs[:, :3] + displacement
@@ -564,9 +556,7 @@ def run_training_run(config):
         train_X, train_y, val_X, val_y, test_X, test_y = load_data(train_set, val_set, test_set)
         
 
-    scaler = GradScaler(device=DEVICE)
-
-    if "loss_fn" in config and config["loss_fn"] in "huber":
+    if "loss_fn" in config and config["loss_fn"] == "huber":
         loss_fn = nn.HuberLoss(delta=config["huber_delta"])
     else:
         loss_fn = nn.MSELoss()
@@ -582,7 +572,7 @@ def run_training_run(config):
         t0 = time.time()
 
         if config["use_dataloader"]:
-            train_loss = train_with_dataloader(model, train_loader, optimizer, loss_fn, scaler, config)
+            train_loss = train_with_dataloader(model, train_loader, optimizer, loss_fn, config)
             val_loss = evaluate_with_dataloader(model, val_loader, loss_fn)
         else:
             train_loss = train_with_full_dataset_on_gpu(
@@ -591,7 +581,6 @@ def run_training_run(config):
                 train_y,
                 optimizer,
                 loss_fn,
-                scaler,
                 config
             )
             val_loss = evaluate_with_full_dataset_on_gpu(model, val_X, val_y, loss_fn, config["batch_size"])
@@ -604,9 +593,9 @@ def run_training_run(config):
             raise Exception(f"Unexpected scheduler choice in config: {config["scheduler"]=}")
         
 
-        if "loss_fn" in config and config["loss_fn"] in "huber":
-            train_pc = loss_to_parsecs_huber(train_loss, train_y, norm_stats)
-            val_pc   = loss_to_parsecs_huber(val_loss, val_y, norm_stats)
+        if "loss_fn" in config and config["loss_fn"] == "huber":
+            train_pc = loss_to_parsecs_huber(train_loss, norm_stats)
+            val_pc   = loss_to_parsecs_huber(val_loss, norm_stats)
         else:
             train_pc = loss_to_parsecs(train_loss, norm_stats)
             val_pc   = loss_to_parsecs(val_loss,   norm_stats)
@@ -641,10 +630,10 @@ def run_training_run(config):
         test_loss = evaluate_with_dataloader(model, test_loader, loss_fn)
     else:
         test_loss = evaluate_with_full_dataset_on_gpu(model, test_X, test_y, loss_fn, config["batch_size"])
-    if "loss_fn" in config and config["loss_fn"] in "huber":
-        test_pc = loss_to_parsecs_huber(test_loss, test_y, norm_stats)
+    if "loss_fn" in config and config["loss_fn"] == "huber":
+        test_pc = loss_to_parsecs_huber(test_loss, norm_stats)
     else:
-        test_pc = loss_to_parsecs(test_loss, test_y, norm_stats)
+        test_pc = loss_to_parsecs(test_loss, norm_stats)
 
     flogger.info(f"{test_pc=} parsecs")
 

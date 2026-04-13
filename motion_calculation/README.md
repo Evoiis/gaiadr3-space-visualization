@@ -225,7 +225,7 @@ Time taken(model_test.py), 2.15
 - Using huber loss_fn with delta 0.1
 - H-layer change: [1024, 1024, 512, 512, 256]
 - batch size reduced to 16384
-
+- swapped from fp16 to bfloat16
 
 #### x:
 - BF16, smaller memory footprint, same precision as fp32
