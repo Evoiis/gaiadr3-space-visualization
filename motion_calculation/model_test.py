@@ -6,7 +6,7 @@ import time
 import os
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-CONFIG_FILE = "config_17.yaml"
+CONFIG_FILE = "configs/config_20.yaml"
 
 print("\nLoading model for test evaluation...")
 
@@ -17,7 +17,7 @@ flogger.set_write_to_file(False)
 config = load_config(CONFIG_FILE)
 
 # --- INPUT -------------------------------------------------
-TEST_DATA_PATH = "test_data_3"
+TEST_DATA_PATH = "./prev_data/test_data_3"
 NORM_PATH = config["norm_path"]
 MODEL_PATH = config["model_name"]
 
@@ -26,7 +26,7 @@ if not os.path.exists(MODEL_PATH):
 
 # OVERRIDE
 # NORM_PATH = "orbit_norm_6.json"
-MODEL_PATH = "orbit_mlp_17_300epochs.pt"
+# MODEL_PATH = "orbit_mlp_17_300epochs.pt"
 
 # ^^^ INPUT ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -55,3 +55,31 @@ print(f"{len(test_X)=}")
 test_pc = loss_to_parsecs(test_loss, norm_stats)
 
 print(f"{test_pc=} parsecs")
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+def plot_xyz_comparison(pred, target, title="XYZ Comparison", n_samples=500):
+    """
+    pred, target: (N, 3) numpy arrays in parsecs
+    """
+    idx = np.random.choice(len(pred), min(n_samples, len(pred)), replace=False)
+    p = pred[idx]
+    t = target[idx]
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    fig.suptitle(title)
+
+    for i, axis in enumerate(['x', 'y', 'z']):
+        ax = axes[i]
+        lim = max(np.abs(t[:, i]).max(), np.abs(p[:, i]).max())
+        ax.scatter(t[:, i], p[:, i], alpha=0.3, s=5)
+        ax.plot([-lim, lim], [-lim, lim], 'r--', linewidth=1)
+        ax.set_xlabel(f"True {axis} (pc)")
+        ax.set_ylabel(f"Pred {axis} (pc)")
+        ax.set_title(f"{axis} — RMSE: {np.sqrt(((p[:, i] - t[:, i])**2).mean()):.2f} pc")
+        ax.set_aspect('equal')
+
+    plt.tight_layout()
+    plt.savefig(f"{title.replace(' ', '_')}.png", dpi=150)
+    plt.close()

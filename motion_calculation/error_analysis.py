@@ -24,12 +24,12 @@ from orbit_mlp import (
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-CONFIG_FILE_PATH = "config_17.yaml"
+CONFIG_FILE_PATH = "configs/config_20.yaml"
 # MODEL_NAME = "orbit_mlp_15.pt"
 # # MODEL_PATH    = "./prev_models/" + MODEL_NAME
 # MODEL_PATH    = MODEL_NAME
 # NORM_PATH     = "orbit_norm_data_4.json"
-VAL_DATA_PATH = "validation_data_3"
+VAL_DATA_PATH = "./prev_data/validation_data_3"
 # OUTPUT_DIR    = "error_analysis_output/" + MODEL_NAME
 
 # os.makedirs(OUTPUT_DIR, exist_ok=True)

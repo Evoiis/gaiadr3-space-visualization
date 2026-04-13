@@ -1,9 +1,9 @@
-model_name: orbit_mlp_1.1.pt
+model_name: orbit_mlp_DSN.pt
 
-norm_path: "orbit_norm_6.json"
-val_data_path: "validation_data_3"
-test_data_path: "test_data_3"
-training_data_path: "training_data_3"
+norm_path: "norms/orbit_norm_data_DSN.json"
+val_data_path: "data/dataset_DSN/validation_data"
+test_data_path: "data/dataset_DSN/test_data"
+training_data_path: "data/dataset_DSN/training_data"
 
 hidden_layers: [512, 512, 256, 256, 128]
 epochs: 150 # Epochs per run
@@ -22,7 +22,7 @@ runs:
   1:  # plateau example
     training_data_filter: /orbit_train_part00[01234]*.npy # Can split data with filters
     min_learning_rate: 0.000001
-    start_learning_rate: 0.001 # Required for first run
+    start_learning_rate: 0.001
     scheduler: plateau # [plateau, cosanneal]
     patience: 15  # Required for pleteau scheduler
     
@@ -32,6 +32,7 @@ runs:
     start_learning_rate: 0.001
     override_learning_rate: True # [True, False] resets optimizer LR to start_learning_rate
     scheduler: cosanneal # [plateau, cosanneal, cosannealwarmrestart]
+    epochs: 50 # Can override epochs in this run
   
   3:  # cosannealwarmrestart example
     training_data_filter: /orbit_train_*.npy

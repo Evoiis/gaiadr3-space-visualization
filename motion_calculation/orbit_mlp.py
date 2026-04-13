@@ -203,12 +203,14 @@ def load_norm_stats(filepath: str) -> dict:
 # --- MLP ---
 
 class OrbitMLP(nn.Module):
-    def __init__(self, hidden_sizes: list):
+    def __init__(self, hidden_sizes: list, config):
         super().__init__()
         layers = []
         in_size = 15
         for h in hidden_sizes:
             layers.append(nn.Linear(in_size, h))
+            if "add_layer_norm" in config and config["add_layer_norm"]:
+                layers.append(nn.LayerNorm(h))
             layers.append(nn.SiLU())
             in_size = h
         layers.append(nn.Linear(in_size, 3))
@@ -218,45 +220,39 @@ class OrbitMLP(nn.Module):
         return self.net(x)
     
 # --- Residual MLP ---
-class ResBlock(nn.Module):
-    def __init__(self, in_size, out_size):
+
+class ResidualBlock(nn.Module):
+    def __init__(self, size):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.LayerNorm(in_size),
-            nn.Linear(in_size, out_size),
+        self.block = nn.Sequential(
+            nn.Linear(size, size),
             nn.SiLU(),
-            nn.LayerNorm(out_size),
-            nn.Linear(out_size, out_size),
+            nn.LayerNorm(size),
+            nn.Linear(size, size),
+            nn.SiLU(),
+            nn.LayerNorm(size)
         )
-        # Only project if dimensions differ
-        self.proj = nn.Linear(in_size, out_size, bias=False) if in_size != out_size else nn.Identity()
 
     def forward(self, x):
-        return self.proj(x) + self.net(x)
-
+        # The skip connection: x + f(x)
+        return x + self.block(x)
 
 class OrbitResidualMLP(nn.Module):
-    def __init__(self, hidden_sizes: list):
+    def __init__(self, hidden_size: int, num_blocks: int):
         super().__init__()
-
-        self.input_proj = nn.Sequential(
-            nn.Linear(15, hidden_sizes[0]),
-            nn.SiLU(),
-            nn.LayerNorm(hidden_sizes[0]),
+        self.input_layer = nn.Linear(15, hidden_size)
+        
+        # Stack multiple residual blocks
+        self.res_blocks = nn.Sequential(
+            *[ResidualBlock(hidden_size) for _ in range(num_blocks)]
         )
-
-        blocks = []
-        for in_size, out_size in zip(hidden_sizes[:-1], hidden_sizes[1:]):
-            blocks.append(ResBlock(in_size, out_size))
-        blocks.append(ResBlock(hidden_sizes[-1], hidden_sizes[-1]))
-        self.blocks = nn.Sequential(*blocks)
-
-        self.output = nn.Linear(hidden_sizes[-1], 3)
+        
+        self.output_layer = nn.Linear(hidden_size, 3)
 
     def forward(self, x):
-        x = self.input_proj(x)
-        x = self.blocks(x)
-        return self.output(x)
+        x = torch.silu(self.input_layer(x))
+        x = self.res_blocks(x)
+        return self.output_layer(x)
 
 # --- Training ---
 
@@ -370,7 +366,7 @@ def load_model_from_file(config):
     if "use_residual_model" in config and config["use_residual_model"]:
         model = OrbitResidualMLP(hidden_sizes=checkpoint["hidden_sizes"]).to(DEVICE)
     else:
-        model = OrbitMLP(hidden_sizes=checkpoint["hidden_sizes"]).to(DEVICE)
+        model = OrbitMLP(hidden_sizes=checkpoint["hidden_sizes"], config=config).to(DEVICE)
 
     model = torch.compile(model)
     model.load_state_dict(checkpoint["model_state"])
@@ -448,6 +444,19 @@ def loss_to_parsecs(mse_normalized: float, norm_stats: dict) -> float:
     avg_std = float(np.mean(y_std))
     return np.sqrt(mse_normalized) * avg_std
 
+def loss_to_parsecs_huber(huber_loss_val, norm_stats):
+    """
+    Approximates parsecs from the Huber scalar.
+    WARNING: Only accurate when error < delta (0.1).
+    """
+    # 1. Huber (for small errors) = 0.5 * MSE
+    # So, MSE = 2 * Huber
+    mse_normalized = 2 * huber_loss_val
+    
+    # 2. Convert normalized MSE to parsecs
+    avg_std = np.mean(norm_stats["y_std"])
+    return math.sqrt(mse_normalized) * avg_std
+
 def load_config(config_file_path: str):
     with open(config_file_path, "r") as f:
         data = yaml.load(f, Loader=yaml.SafeLoader)
@@ -488,7 +497,7 @@ def load_model(config):
         if "use_residual_model" in config and config["use_residual_model"]:
             model = OrbitResidualMLP(hidden_sizes=config["hidden_layers"]).to(DEVICE)
         else:
-            model = OrbitMLP(hidden_sizes=config["hidden_layers"]).to(DEVICE)
+            model = OrbitMLP(hidden_sizes=config["hidden_layers"], config=config).to(DEVICE)
         
         model = torch.compile(model)
 
@@ -556,7 +565,12 @@ def run_training_run(config):
         
 
     scaler = GradScaler(device=DEVICE)
-    loss_fn = nn.MSELoss()
+
+    if "loss_fn" in config and config["loss_fn"] in "huber":
+        loss_fn = nn.HuberLoss(delta=config["huber_delta"])
+    else:
+        loss_fn = nn.MSELoss()
+
     model, scheduler, optimizer, best_val_loss = load_model(config)
     
 
@@ -590,8 +604,12 @@ def run_training_run(config):
             raise Exception(f"Unexpected scheduler choice in config: {config["scheduler"]=}")
         
 
-        train_pc = loss_to_parsecs(train_loss, norm_stats)
-        val_pc   = loss_to_parsecs(val_loss,   norm_stats)
+        if "loss_fn" in config and config["loss_fn"] in "huber":
+            train_pc = loss_to_parsecs_huber(train_loss, train_y, norm_stats)
+            val_pc   = loss_to_parsecs_huber(val_loss, val_y, norm_stats)
+        else:
+            train_pc = loss_to_parsecs(train_loss, norm_stats)
+            val_pc   = loss_to_parsecs(val_loss,   norm_stats)
 
         elapsed = time.time() - t0
 
@@ -623,7 +641,10 @@ def run_training_run(config):
         test_loss = evaluate_with_dataloader(model, test_loader, loss_fn)
     else:
         test_loss = evaluate_with_full_dataset_on_gpu(model, test_X, test_y, loss_fn, config["batch_size"])
-    test_pc   = loss_to_parsecs(test_loss, norm_stats)
+    if "loss_fn" in config and config["loss_fn"] in "huber":
+        test_pc = loss_to_parsecs_huber(test_loss, test_y, norm_stats)
+    else:
+        test_pc = loss_to_parsecs(test_loss, test_y, norm_stats)
 
     flogger.info(f"{test_pc=} parsecs")
 

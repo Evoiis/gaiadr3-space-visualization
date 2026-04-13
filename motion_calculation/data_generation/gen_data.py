@@ -125,9 +125,11 @@ def main():
     data_set_name = "12"
     n_stars = 1000000
     batch_size = 10000
-    write_data(n_stars, batch_size, "training_data_" + data_set_name)
-    write_data(n_stars//10, batch_size, "validation_data_" + data_set_name)
-    write_data(n_stars//10, batch_size, "test_data_" + data_set_name)
+
+    data_folder = "data/dataset_" + data_set_name + "/"
+    write_data(n_stars, batch_size,     data_folder + "training_data")
+    write_data(n_stars//10, batch_size, data_folder + "validation_data")
+    write_data(n_stars//10, batch_size, data_folder + "test_data")
     
 
 if __name__ == "__main__":

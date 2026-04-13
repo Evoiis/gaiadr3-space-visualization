@@ -216,8 +216,18 @@ Time taken(model_test.py), 2.15
 ~9.6 (test_data_3) parsecs
 
 #### 20: (Training_data_12) (flat dist_kpc sampling)
+- 590 epochs, mix of huber added at the end
+
+~7.5 (test_data_3) parsecs error
+
+#### 21: (Training data 12)
+- Added Layernorms in after each hidden layer, before silu
+- Using huber loss_fn with delta 0.1
+- H-layer change: [1024, 1024, 512, 512, 256]
+- batch size reduced to 16384
 
 
 #### x:
-- smaller dataset
+- BF16, smaller memory footprint, same precision as fp32
+
 
