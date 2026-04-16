@@ -104,45 +104,14 @@ class OrbitDataset(Dataset):
 
 # --- Normalization ---
 
-def compute_norm_stats(X, y, file_name):
-
-    if os.path.exists(file_name):
-        return load_norm_stats(file_name)
-    
-    flogger.info("Computing norm stats..")
-
-    n = len(X)
-    
-    X_mean = X.sum(axis=0) / n
-    y_mean = y.sum(axis=0) / n
-
-    X_sq_sum = ((X - X_mean) ** 2).sum(axis=0)
-    y_sq_sum = ((y - y_mean) ** 2).sum(axis=0)
-
-    X_std = np.maximum(np.sqrt(X_sq_sum / n), 1e-8)
-    y_std = np.maximum(np.sqrt(y_sq_sum / n), 1e-8)
-
-    stats = {
-        "X_mean": X_mean.tolist(),
-        "X_std":  X_std.tolist(),
-        "y_mean": y_mean.tolist(),
-        "y_std":  y_std.tolist(),
-    }
-
-    with open(file_name, "w") as f:
-        json.dump(stats, f, indent=2)
-    flogger.info(f"Saved normalization stats to {file_name}")
-    return stats
-
-
 def compute_norm_stats_from_files(folder_paths: list, file_name) -> dict:
     """
     Compute mean and std for inputs and outputs from the full dataset.
-    Save to JSON so inference can apply the same transform.
+    Saves norms to JSON.
     """
 
     if os.path.exists(file_name):
-        return load_norm_stats(file_name)
+        raise Exception(f"norm stats already exists at {file_name}, not computing to prevent unwanted overwrite")
     
     flogger.info("Computing norm stats..")
 
@@ -197,9 +166,11 @@ def compute_norm_stats_from_files(folder_paths: list, file_name) -> dict:
     return stats
 
 
-def load_norm_stats(filepath: str) -> dict:
+def load_norm_stats(config) -> dict:
+    filepath = config["norm_path"]
     if not os.path.exists(filepath):
-        raise Exception(f"Couldn't find norm stats file at: {filepath}")
+        return compute_norm_stats_from_files([config["training_data_path"]], filepath)
+
     with open(filepath) as f:
         raw = json.load(f)
     return {k: np.array(v, dtype=np.float32) for k, v in raw.items()}
@@ -357,9 +328,14 @@ def train_with_dataloader(model, loader, optimizer, loss_fn, scaler, config) -> 
         y_batch = y_batch.to(DEVICE, non_blocking=True)
 
         optimizer.zero_grad(set_to_none=True)
-        with autocast(device_type=DEVICE, dtype=target_dtype):
+
+        if target_dtype == torch.float32 or target_dtype == torch.bfloat16:
             predictions = model(X_batch)
             loss = loss_fn(predictions, y_batch)
+        else:
+            with autocast(device_type=DEVICE, dtype=target_dtype):
+                predictions = model(X_batch)
+                loss = loss_fn(predictions, y_batch)
 
         if target_dtype == torch.float16:
             scaler.scale(loss).backward()
@@ -673,7 +649,7 @@ def run_training_run(config):
     model, scheduler, optimizer, best_val_loss = load_model(config)
 
     flogger.info("Loading dataset...")
-    norm_stats = load_norm_stats(config["norm_path"])
+    norm_stats = load_norm_stats(config)
     train_set = OrbitDataset(
         config["training_data_path"],
         norm_stats,
@@ -687,6 +663,10 @@ def run_training_run(config):
         train_loader, val_loader, test_loader = load_dataloaders(config, train_set, val_set, test_set)
     else:
         train_X, train_y, val_X, val_y, test_X, test_y = load_data(train_set, val_set, test_set)
+
+    del train_set
+    del test_set
+    del val_set
 
     if "loss_fn" in config and config["loss_fn"] == "huber":
         flogger.info("Using huber loss_fn")
@@ -757,7 +737,7 @@ def run_training_run(config):
             }, config["model_name"])
 
     # --- final test evaluation ---
-    flogger.info("\nLoading best model for test evaluation...")
+    flogger.info(f"\nLoading {config["model_name"]}  model for test evaluation...")
     model = load_model_from_file(config)
 
     if config["use_dataloader"]:
@@ -769,7 +749,7 @@ def run_training_run(config):
     else:
         test_pc = loss_to_parsecs(test_loss, norm_stats)
 
-    flogger.info(f"{test_pc=} parsecs")
+    flogger.info(f"{test_pc} parsecs test error")
 
 def main():
     torch.set_float32_matmul_precision("high")

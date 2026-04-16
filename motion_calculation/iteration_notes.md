@@ -298,6 +298,22 @@ popped at the start due to high learning rate
 
 - Looks like bf16 is having a detrimental effect on training...
 
+Iteration 31. Use 100k star training datset.
+---
+- Switching to a more focused/purposeful approach.
+
+- Main purpose:
+    - Look at training outcomes based on which datatype I use to load training data to the gpu
+    - Look at training outcomes from a 100k star dataset
+
+Results:
+- Fixed fp32 autoscale issue.
+- FP32 > FP16 > BF16
+    - BF16 performing worse, could be because of loss of precision
+        - BF16 uses more bits for the exponent
+            - FP16: 5 bit exponent, 10 bit mantissa
+            - BF16: 8 bit exponent, 7 bit mantissa
+
 #### 31: (training_data_13S)
 - 13S data, 100k stars instead of 1M
 - fp16
@@ -308,6 +324,7 @@ popped at the start due to high learning rate
 
 - third run, cast to float
 - 55.791 parsecs test error
+- (test_data_12) 55.159 parsecs test error 
 
 #### 31.1: (training_data_13S)
 - 13S data, 100k stars instead of 1M
@@ -327,10 +344,11 @@ popped at the start due to high learning rate
 
 - 5th run, no changes, with grad clipping
 - 47.102 parsecs test error
+- (test_data_12) 46.287 parsecs test error
 
 #### 31.1.1:
 - 31.1 but with no grad clipping
-- 
+- 49.821 parsecs test error
 
 #### 31.2: (training_data_13S)
 - 13S data, 100k stars instead of 1M
@@ -339,13 +357,79 @@ popped at the start due to high learning rate
 
 - second run, cast to float, no autocast
 - 64.188 parsecs test error
+- (test_data_12) 63.505 parsecs test error
 
+
+Iteration 32. 600 epoch versions of Iteration 31
+---
+- Main purpose:
+    - See how much more I can extract with the 100k star dataset by extending epochs to 600
+
+Results:
+- Pretty clear there was a bit more performance to extract.
+- 32.2: lr=3.13e-05, still LR left, might not have pushed all the way to the limit
 #### 32:
 - 31, fp32, 600 epochs
+
+- 42.081 parsecs test error
 
 #### 32.1:
 - 31.1, 600 epochs, with grad clipping
 
+- 33.015 parsecs test error
+
 #### 32.2:
 - 31.2, 600 epochs
-- 
+
+- 66.75 parsecs test error
+- Last epoch: lr=1.00e-06  train_pc=np.float64(48.33429146927758), val_pc=np.float64(66.79701231983351)
+    - train_pc is significantly less than val_pc
+
+
+Iteration 33. Training with 200k stars dataset
+---
+- Each 33.X is 33.0 with one change.
+- Continue with FP32.
+
+- Main Purpose:
+    - Explore variations with 200k star datset
+
+Results:
+- batch size 
+#### 33.0: (training_data_14_20p)
+- 200k stars in training data
+- fp32
+- 600 epochs
+- batch_size 102400
+- no grad clip
+
+- lr=3.13e-05 
+- 27.755 parsecs test error
+
+#### 33.1:
+- batch_size 8192
+
+- 7.43605633162477 parsecs
+
+#### 33.2: (training_data_14_20p)
+- batch_size 102400
+- cosanneal
+
+- 20.0712 parsecs test error
+
+#### 33.3:
+- with grad clip
+
+- 21.572680506625503 parsecs test error
+#### 33.4:
+- hidden_layers: [1024, 1024, 512, 256, 128]
+
+- 15.98415529168212 parsecs test error
+#### 33.5:
+- hidden_layers: [512, 512, 256, 256, 128, 64]
+
+- 23.75804321840307 parsecs test error
+### 33.6:
+- hidden_layers: [512, 256, 128]
+
+- 92.6142620665024 parsecs test error

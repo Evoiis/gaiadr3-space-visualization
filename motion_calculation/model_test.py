@@ -39,7 +39,7 @@ if not os.path.exists(norm_path):
 
 print(f"\nLoading model {config['model_name']=} for test evaluation...")
 model = load_model_from_file(config)
-norm_stats = load_norm_stats(norm_path)
+norm_stats = load_norm_stats(config)
 
 print(f"Loading test data from: {TEST_DATA_PATH}")
 test_set = OrbitDataset(TEST_DATA_PATH, norm_stats)
