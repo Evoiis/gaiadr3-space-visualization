@@ -551,7 +551,7 @@ def load_dataloaders(config, train_set, val_set, test_set):
 def init_scheduler(config, optimizer):
     if config["scheduler"] == "plateau":
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=0.5, patience=config["patience"], min_lr=config["min_learning_rate"]
+            optimizer, mode="min", factor=config.get("scheduler_multiplier", 0.5), patience=config["patience"], min_lr=config["min_learning_rate"]
         )
     elif config["scheduler"] == "cosanneal":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -560,6 +560,14 @@ def init_scheduler(config, optimizer):
     elif config["scheduler"] == "cosannealwarmrestart":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
             optimizer, T_0=config["warm_restart_epochs"], T_mult=config["warm_restart_cycle_mult"], eta_min=config["min_learning_rate"]
+        )
+    elif config["scheduler"] == "step":
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer, step_size=config["scheduler_step_size"], gamma=config["scheduler_multiplier"]
+        )
+    elif config["scheduler"] == "multistep":
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer, milestones=config["scheduler_milestones"], gamma=config["scheduler_multiplier"]
         )
     else:
         raise Exception(f"Unexpected scheduler choice in config: {config["scheduler"]=}")
@@ -789,11 +797,16 @@ def main():
     run_list = list(runs.keys())
     run_list.sort()
 
+    if experiment := mlflow.get_experiment_by_name(config["model_name"]):
+        exp_id = experiment.experiment_id
+    else:
+        exp_id = mlflow.create_experiment(config["model_name"])
+
     for run in run_list:
         if config["model_name"] in os.listdir("."):
             shutil.copyfile(config["model_name"], "r" + str(run - 1) + "_" + config["model_name"])
         flogger.info(f"\n\nStarting run: {run}")
-        with mlflow.start_run(run_name=config["model_name"] + "_" + str(run)):
+        with mlflow.start_run(run_name=config["model_name"] + "_" + str(run), experiment_id=exp_id):
             run_config = config | runs[run]
             mlflow.log_params(run_config)
             run_training_run(run_config)
